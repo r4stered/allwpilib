@@ -329,6 +329,7 @@ if(WITH_GUI)
     if(LIBSSH_FOUND)
         add_subdirectory(tools/datalogtool)
     endif()
+    add_subdirectory(tools/filterdesigner)
 endif()
 
 if(WITH_WPILIB OR WITH_SIMULATION_MODULES)
