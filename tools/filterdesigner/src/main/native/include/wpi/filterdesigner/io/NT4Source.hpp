@@ -26,9 +26,9 @@ namespace wpi::filterdesigner {
  */
 class NT4Source {
  public:
-  /** A single timestamped sample. Time base matches NT (microseconds). */
+  /** A single timestamped sample. Time base matches NT (nanoseconds). */
   struct Sample {
-    int64_t timeMicros;
+    int64_t timeNanos;
     double value;
   };
 
@@ -76,7 +76,7 @@ class NT4Source {
   // from every sample so the displayed timeline starts at 0 instead of at
   // wall-clock microseconds. Reset by Clear() so re-subscribing to a topic
   // restarts the timeline from 0. Sentinel: m_haveT0 == false → unset.
-  std::int64_t m_t0Micros = 0;
+  std::int64_t m_t0Nanos = 0;
   bool m_haveT0 = false;
 };
 

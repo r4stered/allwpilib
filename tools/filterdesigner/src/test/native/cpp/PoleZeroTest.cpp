@@ -9,8 +9,9 @@
 #include <complex>
 #include <numbers>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/model/Stage.hpp"
 #include "wpi/math/filter/BiquadFilter.hpp"
 #include "wpi/units/frequency.hpp"
@@ -28,43 +29,45 @@ Sections SectionsOf(const BiquadFilter& f) {
   return Sections(span.begin(), span.end());
 }
 
-TEST(PoleZeroTest, EmptyCascadeHasNoRoots) {
+TEST_CASE("PoleZeroTest EmptyCascadeHasNoRoots", "[filterdesigner]") {
   Sections empty;
   auto pz = ComputePolesZeros(empty);
-  EXPECT_TRUE(pz.poles.empty());
-  EXPECT_TRUE(pz.zeros.empty());
+  CHECK(pz.poles.empty());
+  CHECK(pz.zeros.empty());
 }
 
-TEST(PoleZeroTest, PassThroughHasPolesAndZerosAtOrigin) {
+TEST_CASE("PoleZeroTest PassThroughHasPolesAndZerosAtOrigin",
+          "[filterdesigner]") {
   // b0=1, everything else 0 — H(z) = 1. The quadratic-as-stored form is
   // 1*z^2 + 0*z + 0, root at 0 (double), same on the denominator (a1=a2=0).
   Sections s{Section{1.0, 0.0, 0.0, 0.0, 0.0}};
   auto pz = ComputePolesZeros(s);
-  ASSERT_EQ(pz.poles.size(), 2u);
-  ASSERT_EQ(pz.zeros.size(), 2u);
+  REQUIRE(pz.poles.size() == 2u);
+  REQUIRE(pz.zeros.size() == 2u);
   for (const auto& p : pz.poles) {
-    EXPECT_NEAR(std::abs(p), 0.0, 1e-12);
+    CHECK_NEAR(std::abs(p), 0.0, 1e-12);
   }
   for (const auto& z : pz.zeros) {
-    EXPECT_NEAR(std::abs(z), 0.0, 1e-12);
+    CHECK_NEAR(std::abs(z), 0.0, 1e-12);
   }
 }
 
-TEST(PoleZeroTest, ButterworthLowPassPolesInsideUnitCircle) {
+TEST_CASE("PoleZeroTest ButterworthLowPassPolesInsideUnitCircle",
+          "[filterdesigner]") {
   auto filter = SectionsOf(BiquadFilter::Butterworth(
       BiquadFilter::Kind::LowPass, 4, 1000_Hz, 100_Hz));
   auto pz = ComputePolesZeros(filter);
   // 2 biquad sections × 2 poles = 4 poles.
-  EXPECT_EQ(pz.poles.size(), 4u);
+  CHECK(pz.poles.size() == 4u);
   // Stability: every pole strictly inside the unit circle.
   for (const auto& p : pz.poles) {
-    EXPECT_LT(std::abs(p), 1.0 - 1e-6)
-        << "pole at (" << p.real() << ", " << p.imag()
-        << ") not inside unit circle";
+    UNSCOPED_INFO("pole at (" << p.real() << ", " << p.imag()
+                              << ") not inside unit circle");
+    CHECK(std::abs(p) < 1.0 - 1e-6);
   }
 }
 
-TEST(PoleZeroTest, ButterworthLowPassZerosAtNyquist) {
+TEST_CASE("PoleZeroTest ButterworthLowPassZerosAtNyquist", "[filterdesigner]") {
   // The bilinear transform maps analog zeros at infinity to z = -1 (Nyquist).
   // A 4th-order Butterworth LP has 4 zeros, all at z = -1. Tolerance is ~1e-6
   // because (a) the design pipeline accumulates small floating-point error and
@@ -74,14 +77,15 @@ TEST(PoleZeroTest, ButterworthLowPassZerosAtNyquist) {
   auto filter = SectionsOf(BiquadFilter::Butterworth(
       BiquadFilter::Kind::LowPass, 4, 1000_Hz, 100_Hz));
   auto pz = ComputePolesZeros(filter);
-  ASSERT_EQ(pz.zeros.size(), 4u);
+  REQUIRE(pz.zeros.size() == 4u);
   for (const auto& z : pz.zeros) {
-    EXPECT_LT(std::abs(z - std::complex<double>{-1.0, 0.0}), 1e-6)
-        << "zero at (" << z.real() << ", " << z.imag() << ") not near Nyquist";
+    UNSCOPED_INFO("zero at (" << z.real() << ", " << z.imag()
+                              << ") not near Nyquist");
+    CHECK(std::abs(z - std::complex<double>{-1.0, 0.0}) < 1e-6);
   }
 }
 
-TEST(PoleZeroTest, ButterworthHighPassZerosAtDC) {
+TEST_CASE("PoleZeroTest ButterworthHighPassZerosAtDC", "[filterdesigner]") {
   // High-pass: analog zeros at 0 map to z = 1 under bilinear transform. For
   // order=3, the cascade is one biquad (real-pole-pair) + one first-order
   // section. The biquad's numerator is (z-1)^2 (two zeros at unity); the
@@ -90,7 +94,7 @@ TEST(PoleZeroTest, ButterworthHighPassZerosAtDC) {
   auto filter = SectionsOf(BiquadFilter::Butterworth(
       BiquadFilter::Kind::HighPass, 3, 1000_Hz, 100_Hz));
   auto pz = ComputePolesZeros(filter);
-  ASSERT_EQ(pz.zeros.size(), 4u);
+  REQUIRE(pz.zeros.size() == 4u);
   int atUnity = 0;
   int atOrigin = 0;
   for (const auto& z : pz.zeros) {
@@ -100,11 +104,12 @@ TEST(PoleZeroTest, ButterworthHighPassZerosAtDC) {
       ++atOrigin;
     }
   }
-  EXPECT_EQ(atUnity, 3);
-  EXPECT_EQ(atOrigin, 1);
+  CHECK(atUnity == 3);
+  CHECK(atOrigin == 1);
 }
 
-TEST(PoleZeroTest, NotchZerosOnUnitCircleAtCenterFrequency) {
+TEST_CASE("PoleZeroTest NotchZerosOnUnitCircleAtCenterFrequency",
+          "[filterdesigner]") {
   // scipy.signal.iirnotch places its two numerator zeros exactly on the unit
   // circle at e^{±j w0}, and its poles slightly inside the unit circle at
   // e^{±j w0} * r for some r < 1 determined by Q.
@@ -112,37 +117,37 @@ TEST(PoleZeroTest, NotchZerosOnUnitCircleAtCenterFrequency) {
   constexpr double f0 = 60.0;
   auto filter = SectionsOf(BiquadFilter::Notch(hertz_t{fs}, hertz_t{f0}, 10.0));
   auto pz = ComputePolesZeros(filter);
-  ASSERT_EQ(pz.zeros.size(), 2u);
-  ASSERT_EQ(pz.poles.size(), 2u);
+  REQUIRE(pz.zeros.size() == 2u);
+  REQUIRE(pz.poles.size() == 2u);
 
   // Zeros should lie on the unit circle.
   for (const auto& z : pz.zeros) {
-    EXPECT_NEAR(std::abs(z), 1.0, 1e-9);
+    CHECK_NEAR(std::abs(z), 1.0, 1e-9);
   }
   // Zero angles should be ±2π * f0/fs.
   double expectedAngle = 2.0 * std::numbers::pi * f0 / fs;
   double observedAngle = std::abs(std::arg(pz.zeros.front()));
-  EXPECT_NEAR(observedAngle, expectedAngle, 1e-6);
+  CHECK_NEAR(observedAngle, expectedAngle, 1e-6);
 
   // Poles strictly inside the unit circle, and at the same angle as zeros.
   for (const auto& p : pz.poles) {
-    EXPECT_LT(std::abs(p), 1.0);
-    EXPECT_GT(std::abs(p), 0.9);  // high-Q notch has poles close to the zeros
+    CHECK(std::abs(p) < 1.0);
+    CHECK(std::abs(p) > 0.9);  // high-Q notch has poles close to the zeros
   }
   double poleAngle = std::abs(std::arg(pz.poles.front()));
-  EXPECT_NEAR(poleAngle, expectedAngle, 1e-3);
+  CHECK_NEAR(poleAngle, expectedAngle, 1e-3);
 }
 
-TEST(PoleZeroTest, MovingAverageHasPolesAtOrigin) {
+TEST_CASE("PoleZeroTest MovingAverageHasPolesAtOrigin", "[filterdesigner]") {
   auto filter = SectionsOf(BiquadFilter::MovingAverage(5));
   auto pz = ComputePolesZeros(filter);
   // Pure-FIR sections: a1 = a2 = 0 for every section, so every pole is at 0.
   for (const auto& p : pz.poles) {
-    EXPECT_NEAR(std::abs(p), 0.0, 1e-12);
+    CHECK_NEAR(std::abs(p), 0.0, 1e-12);
   }
 }
 
-TEST(PoleZeroTest, ComplexPolesAreConjugatePairs) {
+TEST_CASE("PoleZeroTest ComplexPolesAreConjugatePairs", "[filterdesigner]") {
   // Butterworth poles appear in conjugate pairs (for order > 1). Verify by
   // matching each non-real pole to its conjugate.
   auto filter = SectionsOf(BiquadFilter::Butterworth(
@@ -157,8 +162,9 @@ TEST(PoleZeroTest, ComplexPolesAreConjugatePairs) {
                              [&](const std::complex<double>& q) {
                                return std::abs(q - conj) < 1e-9;
                              });
-    EXPECT_TRUE(found) << "no conjugate for pole (" << p.real() << ", "
-                       << p.imag() << ")";
+    UNSCOPED_INFO("no conjugate for pole (" << p.real() << ", " << p.imag()
+                                            << ")");
+    CHECK(found);
   }
 }
 

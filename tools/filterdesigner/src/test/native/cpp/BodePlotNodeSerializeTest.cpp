@@ -6,8 +6,9 @@
 #include <string>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/graph/Serialize.hpp"
@@ -23,7 +24,7 @@ using wpi::filterdesigner::Graph;
 using wpi::filterdesigner::NodeRegistry;
 using wpi::filterdesigner::SerializeGraph;
 
-TEST(BodePlotNodeSerializeTest, ParamsRoundTrip) {
+TEST_CASE("BodePlotNodeSerializeTest ParamsRoundTrip", "[filterdesigner]") {
   NodeRegistry reg;
   BodePlotNode::Register(reg);
 
@@ -40,17 +41,19 @@ TEST(BodePlotNodeSerializeTest, ParamsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<BodePlotNode*>(restored.FindNodeById(bodeId));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_FALSE(loaded->Logic().autoscale);
-  EXPECT_FALSE(loaded->Logic().showLegend);
-  EXPECT_EQ(loaded->Logic().numPoints, 1024);
-  EXPECT_FLOAT_EQ(loaded->Logic().plotWidth, 720.0f);
-  EXPECT_FLOAT_EQ(loaded->Logic().plotHeight, 410.0f);
+  REQUIRE(loaded != nullptr);
+  CHECK_FALSE(loaded->Logic().autoscale);
+  CHECK_FALSE(loaded->Logic().showLegend);
+  CHECK(loaded->Logic().numPoints == 1024);
+  CHECK_FLOAT_EQ(loaded->Logic().plotWidth, 720.0f);
+  CHECK_FLOAT_EQ(loaded->Logic().plotHeight, 410.0f);
 }
 
-TEST(BodePlotNodeSerializeTest, NumPointsClampedOnLoad) {
+TEST_CASE("BodePlotNodeSerializeTest NumPointsClampedOnLoad",
+          "[filterdesigner]") {
   NodeRegistry reg;
   BodePlotNode::Register(reg);
 
@@ -65,10 +68,11 @@ TEST(BodePlotNodeSerializeTest, NumPointsClampedOnLoad) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<BodePlotNode*>(restored.FindNodeById(1));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().numPoints, BodePlotNodeLogic::kMaxPoints);
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().numPoints == BodePlotNodeLogic::kMaxPoints);
 }
 
 }  // namespace

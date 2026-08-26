@@ -106,7 +106,7 @@ std::optional<Signal> WpiLogSource::LoadEntry(std::string_view name) const {
     if (!ok) {
       continue;
     }
-    sig.timestamps.push_back(record.GetTimestamp() * 1e-6);
+    sig.timestamps.push_back(record.GetTimestamp() * 1e-9);
     sig.values.push_back(value);
   }
   sig.sampleRate = Signal::InferSampleRate(sig.timestamps);

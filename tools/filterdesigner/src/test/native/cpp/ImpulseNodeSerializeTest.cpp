@@ -6,8 +6,9 @@
 #include <string>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/graph/Serialize.hpp"
@@ -27,7 +28,7 @@ using wpi::filterdesigner::NodeRegistry;
 using wpi::filterdesigner::SerializeGraph;
 using wpi::filterdesigner::TimePlotNode;
 
-TEST(ImpulseNodeSerializeTest, ParamsRoundTrip) {
+TEST_CASE("ImpulseNodeSerializeTest ParamsRoundTrip", "[filterdesigner]") {
   NodeRegistry reg;
   ImpulseNode::Register(reg);
 
@@ -41,14 +42,15 @@ TEST(ImpulseNodeSerializeTest, ParamsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<ImpulseNode*>(restored.FindNodeById(id));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_DOUBLE_EQ(loaded->Logic().sampleRate, 2500.0);
-  EXPECT_EQ(loaded->Logic().length, 64);
+  REQUIRE(loaded != nullptr);
+  CHECK_DOUBLE_EQ(loaded->Logic().sampleRate, 2500.0);
+  CHECK(loaded->Logic().length == 64);
 }
 
-TEST(ImpulseNodeSerializeTest, LengthClampedOnLoad) {
+TEST_CASE("ImpulseNodeSerializeTest LengthClampedOnLoad", "[filterdesigner]") {
   NodeRegistry reg;
   ImpulseNode::Register(reg);
 
@@ -64,13 +66,15 @@ TEST(ImpulseNodeSerializeTest, LengthClampedOnLoad) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<ImpulseNode*>(restored.FindNodeById(1));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().length, ImpulseNodeLogic::kMaxLength);
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().length == ImpulseNodeLogic::kMaxLength);
 }
 
-TEST(ImpulseNodeSerializeTest, ToBiquadStageToTimePlotChainRoundTrips) {
+TEST_CASE("ImpulseNodeSerializeTest ToBiquadStageToTimePlotChainRoundTrips",
+          "[filterdesigner]") {
   NodeRegistry reg;
   ImpulseNode::Register(reg);
   BiquadStageNode::Register(reg);
@@ -92,8 +96,9 @@ TEST(ImpulseNodeSerializeTest, ToBiquadStageToTimePlotChainRoundTrips) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
-  ASSERT_EQ(restored.Links().size(), 2u);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(restored.Links().size() == 2u);
 
   bool foundSrcToStage = false;
   bool foundStageToPlot = false;
@@ -106,8 +111,8 @@ TEST(ImpulseNodeSerializeTest, ToBiquadStageToTimePlotChainRoundTrips) {
       foundStageToPlot = true;
     }
   }
-  EXPECT_TRUE(foundSrcToStage);
-  EXPECT_TRUE(foundStageToPlot);
+  CHECK(foundSrcToStage);
+  CHECK(foundStageToPlot);
 }
 
 }  // namespace

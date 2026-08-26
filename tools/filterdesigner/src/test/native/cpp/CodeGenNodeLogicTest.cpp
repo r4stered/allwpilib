@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/codegen/CodeGen.hpp"
 #include "wpi/filterdesigner/model/DesignedFilter.hpp"
@@ -26,49 +26,53 @@ DesignedFilter MakeFilter() {
   return f;
 }
 
-TEST(CodeGenNodeLogicTest, NullFilterReturnsEmpty) {
+TEST_CASE("CodeGenNodeLogicTest NullFilterReturnsEmpty", "[filterdesigner]") {
   CodeGenNodeLogic logic;
-  EXPECT_TRUE(logic.Generate(nullptr).empty());
+  CHECK(logic.Generate(nullptr).empty());
 }
 
-TEST(CodeGenNodeLogicTest, EmptySectionsReturnsEmpty) {
+TEST_CASE("CodeGenNodeLogicTest EmptySectionsReturnsEmpty",
+          "[filterdesigner]") {
   CodeGenNodeLogic logic;
   DesignedFilter f;
   f.sampleRate = 1000.0;
-  EXPECT_TRUE(logic.Generate(&f).empty());
+  CHECK(logic.Generate(&f).empty());
 }
 
-TEST(CodeGenNodeLogicTest, DefaultsEmitCppSnippet) {
+TEST_CASE("CodeGenNodeLogicTest DefaultsEmitCppSnippet", "[filterdesigner]") {
   CodeGenNodeLogic logic;
   DesignedFilter f = MakeFilter();
   std::string out = logic.Generate(&f);
-  EXPECT_NE(out.find("wpi::math::BiquadFilter filter"), std::string::npos);
+  CHECK(out.find("wpi::math::BiquadFilter filter") != std::string::npos);
 }
 
-TEST(CodeGenNodeLogicTest, JavaLangSelectsJavaEmitter) {
+TEST_CASE("CodeGenNodeLogicTest JavaLangSelectsJavaEmitter",
+          "[filterdesigner]") {
   CodeGenNodeLogic logic;
   logic.lang = Language::Java;
   DesignedFilter f = MakeFilter();
   std::string out = logic.Generate(&f);
-  EXPECT_NE(out.find("BiquadFilter filter = new BiquadFilter"),
-            std::string::npos);
+  CHECK(out.find("BiquadFilter filter = new BiquadFilter") !=
+        std::string::npos);
 }
 
-TEST(CodeGenNodeLogicTest, PythonLangSelectsPythonEmitter) {
+TEST_CASE("CodeGenNodeLogicTest PythonLangSelectsPythonEmitter",
+          "[filterdesigner]") {
   CodeGenNodeLogic logic;
   logic.lang = Language::Python;
   DesignedFilter f = MakeFilter();
   std::string out = logic.Generate(&f);
-  EXPECT_NE(out.find("from wpimath.filter import BiquadFilter"),
-            std::string::npos);
+  CHECK(out.find("from wpimath.filter import BiquadFilter") !=
+        std::string::npos);
 }
 
-TEST(CodeGenNodeLogicTest, VarNameAppearsInEmittedCode) {
+TEST_CASE("CodeGenNodeLogicTest VarNameAppearsInEmittedCode",
+          "[filterdesigner]") {
   CodeGenNodeLogic logic;
   logic.varName = "shooterFilter";
   DesignedFilter f = MakeFilter();
   std::string out = logic.Generate(&f);
-  EXPECT_NE(out.find("shooterFilter"), std::string::npos);
+  CHECK(out.find("shooterFilter") != std::string::npos);
 }
 
 }  // namespace

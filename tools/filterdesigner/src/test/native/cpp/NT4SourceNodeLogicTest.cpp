@@ -6,8 +6,9 @@
 
 #include <vector>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/io/NT4Source.hpp"
 #include "wpi/nt/ntcore_c.h"
 
@@ -16,24 +17,27 @@ namespace {
 using wpi::filterdesigner::NT4Source;
 using wpi::filterdesigner::NT4SourceNodeLogic;
 
-TEST(NT4SourceNodeLogicTest, DefaultsMatchNetworkTablesConventions) {
+TEST_CASE("NT4SourceNodeLogicTest DefaultsMatchNetworkTablesConventions",
+          "[filterdesigner]") {
   NT4SourceNodeLogic logic;
-  EXPECT_EQ(logic.serverMode, NT4SourceNodeLogic::ServerMode::Host);
-  EXPECT_EQ(logic.host, "127.0.0.1");
-  EXPECT_EQ(logic.team, 0);
-  EXPECT_EQ(logic.port, static_cast<int>(NT_DEFAULT_PORT));
-  EXPECT_TRUE(logic.TopicName().empty());
-  EXPECT_DOUBLE_EQ(logic.BufferSeconds(), 30.0);
-  EXPECT_FALSE(logic.Frozen());
+  CHECK(logic.serverMode == NT4SourceNodeLogic::ServerMode::Host);
+  CHECK(logic.host == "127.0.0.1");
+  CHECK(logic.team == 0);
+  CHECK(logic.port == static_cast<int>(NT_DEFAULT_PORT));
+  CHECK(logic.TopicName().empty());
+  CHECK_DOUBLE_EQ(logic.BufferSeconds(), 30.0);
+  CHECK_FALSE(logic.Frozen());
 }
 
-TEST(NT4SourceNodeLogicTest, SignalReturnsNullWhenBufferEmpty) {
+TEST_CASE("NT4SourceNodeLogicTest SignalReturnsNullWhenBufferEmpty",
+          "[filterdesigner]") {
   NT4SourceNodeLogic logic;
   logic.Update();  // no drain set + no samples
-  EXPECT_EQ(logic.Signal(), nullptr);
+  CHECK(logic.Signal() == nullptr);
 }
 
-TEST(NT4SourceNodeLogicTest, SignalReturnsStablePointerOnceSamplesArrive) {
+TEST_CASE("NT4SourceNodeLogicTest SignalReturnsStablePointerOnceSamplesArrive",
+          "[filterdesigner]") {
   NT4SourceNodeLogic logic;
   bool drained = false;
   logic.SetDrain([&drained]() {
@@ -41,23 +45,25 @@ TEST(NT4SourceNodeLogicTest, SignalReturnsStablePointerOnceSamplesArrive) {
       return std::vector<NT4Source::Sample>{};
     }
     drained = true;
-    return std::vector<NT4Source::Sample>{{100, 1.0}, {200, 2.0}};
+    return std::vector<NT4Source::Sample>{{100'000, 1.0}, {200'000, 2.0}};
   });
   logic.Update();
   const auto* first = logic.Signal();
-  ASSERT_NE(first, nullptr);
+  REQUIRE(first != nullptr);
   logic.Update();
-  EXPECT_EQ(logic.Signal(), first);
+  CHECK(logic.Signal() == first);
 }
 
-TEST(NT4SourceNodeLogicTest, SetTopicNamePropagatesToSignalName) {
+TEST_CASE("NT4SourceNodeLogicTest SetTopicNamePropagatesToSignalName",
+          "[filterdesigner]") {
   NT4SourceNodeLogic logic;
   logic.SetTopicName("/SmartDashboard/shooter/rpm");
-  EXPECT_EQ(logic.TopicName(), "/SmartDashboard/shooter/rpm");
-  EXPECT_EQ(logic.Source().GetSignal()->name, "/SmartDashboard/shooter/rpm");
+  CHECK(logic.TopicName() == "/SmartDashboard/shooter/rpm");
+  CHECK(logic.Source().GetSignal()->name == "/SmartDashboard/shooter/rpm");
 }
 
-TEST(NT4SourceNodeLogicTest, ClearDropsBufferedSamplesButKeepsTopic) {
+TEST_CASE("NT4SourceNodeLogicTest ClearDropsBufferedSamplesButKeepsTopic",
+          "[filterdesigner]") {
   NT4SourceNodeLogic logic;
   logic.SetTopicName("/foo");
   bool drained = false;
@@ -66,27 +72,29 @@ TEST(NT4SourceNodeLogicTest, ClearDropsBufferedSamplesButKeepsTopic) {
       return std::vector<NT4Source::Sample>{};
     }
     drained = true;
-    return std::vector<NT4Source::Sample>{{100, 1.0}, {200, 2.0}};
+    return std::vector<NT4Source::Sample>{{100'000, 1.0}, {200'000, 2.0}};
   });
   logic.Update();
-  ASSERT_EQ(logic.SampleCount(), 2u);
+  REQUIRE(logic.SampleCount() == 2u);
   logic.Clear();
-  EXPECT_EQ(logic.SampleCount(), 0u);
+  CHECK(logic.SampleCount() == 0u);
   // Topic identity follows the subscription, not the buffer.
-  EXPECT_EQ(logic.TopicName(), "/foo");
-  EXPECT_EQ(logic.Source().GetSignal()->name, "/foo");
+  CHECK(logic.TopicName() == "/foo");
+  CHECK(logic.Source().GetSignal()->name == "/foo");
 }
 
-TEST(NT4SourceNodeLogicTest, BufferSecondsValidatedToPositive) {
+TEST_CASE("NT4SourceNodeLogicTest BufferSecondsValidatedToPositive",
+          "[filterdesigner]") {
   NT4SourceNodeLogic logic;
   logic.SetBufferSeconds(20.0);
   logic.SetBufferSeconds(0.0);
-  EXPECT_DOUBLE_EQ(logic.BufferSeconds(), 20.0);
+  CHECK_DOUBLE_EQ(logic.BufferSeconds(), 20.0);
   logic.SetBufferSeconds(-3.0);
-  EXPECT_DOUBLE_EQ(logic.BufferSeconds(), 20.0);
+  CHECK_DOUBLE_EQ(logic.BufferSeconds(), 20.0);
 }
 
-TEST(NT4SourceNodeLogicTest, FrozenIgnoresDrainedSamples) {
+TEST_CASE("NT4SourceNodeLogicTest FrozenIgnoresDrainedSamples",
+          "[filterdesigner]") {
   NT4SourceNodeLogic logic;
   bool drained = false;
   logic.SetDrain([&drained]() {
@@ -94,36 +102,39 @@ TEST(NT4SourceNodeLogicTest, FrozenIgnoresDrainedSamples) {
       return std::vector<NT4Source::Sample>{};
     }
     drained = true;
-    return std::vector<NT4Source::Sample>{{100, 1.0}, {200, 2.0}};
+    return std::vector<NT4Source::Sample>{{100'000, 1.0}, {200'000, 2.0}};
   });
   logic.SetFrozen(true);
   logic.Update();
-  EXPECT_EQ(logic.SampleCount(), 0u);
-  EXPECT_EQ(logic.Signal(), nullptr);
+  CHECK(logic.SampleCount() == 0u);
+  CHECK(logic.Signal() == nullptr);
 }
 
-TEST(NT4SourceNodeLogicTest, SanitizeTeamClampsNegativeToZero) {
-  EXPECT_EQ(NT4SourceNodeLogic::SanitizeTeam(0), 0);
-  EXPECT_EQ(NT4SourceNodeLogic::SanitizeTeam(254), 254);
-  EXPECT_EQ(NT4SourceNodeLogic::SanitizeTeam(-1), 0);
+TEST_CASE("NT4SourceNodeLogicTest SanitizeTeamClampsNegativeToZero",
+          "[filterdesigner]") {
+  CHECK(NT4SourceNodeLogic::SanitizeTeam(0) == 0);
+  CHECK(NT4SourceNodeLogic::SanitizeTeam(254) == 254);
+  CHECK(NT4SourceNodeLogic::SanitizeTeam(-1) == 0);
 }
 
-TEST(NT4SourceNodeLogicTest, SanitizePortFallsBackToDefaultOnNonPositive) {
-  EXPECT_EQ(NT4SourceNodeLogic::SanitizePort(5810),
-            static_cast<int>(NT_DEFAULT_PORT));
-  EXPECT_EQ(NT4SourceNodeLogic::SanitizePort(0),
-            static_cast<int>(NT_DEFAULT_PORT));
-  EXPECT_EQ(NT4SourceNodeLogic::SanitizePort(-7),
-            static_cast<int>(NT_DEFAULT_PORT));
-  EXPECT_EQ(NT4SourceNodeLogic::SanitizePort(9001), 9001);
+TEST_CASE("NT4SourceNodeLogicTest SanitizePortFallsBackToDefaultOnNonPositive",
+          "[filterdesigner]") {
+  CHECK(NT4SourceNodeLogic::SanitizePort(5810) ==
+        static_cast<int>(NT_DEFAULT_PORT));
+  CHECK(NT4SourceNodeLogic::SanitizePort(0) ==
+        static_cast<int>(NT_DEFAULT_PORT));
+  CHECK(NT4SourceNodeLogic::SanitizePort(-7) ==
+        static_cast<int>(NT_DEFAULT_PORT));
+  CHECK(NT4SourceNodeLogic::SanitizePort(9001) == 9001);
 }
 
-TEST(NT4SourceNodeLogicTest, UpdateWithNoDrainIsNoOp) {
+TEST_CASE("NT4SourceNodeLogicTest UpdateWithNoDrainIsNoOp",
+          "[filterdesigner]") {
   NT4SourceNodeLogic logic;
   logic.Update();
   logic.Update();
-  EXPECT_EQ(logic.SampleCount(), 0u);
-  EXPECT_EQ(logic.Signal(), nullptr);
+  CHECK(logic.SampleCount() == 0u);
+  CHECK(logic.Signal() == nullptr);
 }
 
 }  // namespace

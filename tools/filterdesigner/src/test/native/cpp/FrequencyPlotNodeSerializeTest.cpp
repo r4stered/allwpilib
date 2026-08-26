@@ -6,8 +6,9 @@
 #include <string>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/graph/Serialize.hpp"
@@ -26,7 +27,8 @@ using wpi::filterdesigner::ImpulseNode;
 using wpi::filterdesigner::NodeRegistry;
 using wpi::filterdesigner::SerializeGraph;
 
-TEST(FrequencyPlotNodeSerializeTest, ParamsRoundTrip) {
+TEST_CASE("FrequencyPlotNodeSerializeTest ParamsRoundTrip",
+          "[filterdesigner]") {
   NodeRegistry reg;
   FrequencyPlotNode::Register(reg);
 
@@ -43,17 +45,19 @@ TEST(FrequencyPlotNodeSerializeTest, ParamsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<FrequencyPlotNode*>(restored.FindNodeById(id));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_FALSE(loaded->Logic().autoscale);
-  EXPECT_FALSE(loaded->Logic().showLegend);
-  EXPECT_TRUE(loaded->Logic().logFrequency);
-  EXPECT_FLOAT_EQ(loaded->Logic().plotWidth, 480.0f);
-  EXPECT_FLOAT_EQ(loaded->Logic().plotHeight, 280.0f);
+  REQUIRE(loaded != nullptr);
+  CHECK_FALSE(loaded->Logic().autoscale);
+  CHECK_FALSE(loaded->Logic().showLegend);
+  CHECK(loaded->Logic().logFrequency);
+  CHECK_FLOAT_EQ(loaded->Logic().plotWidth, 480.0f);
+  CHECK_FLOAT_EQ(loaded->Logic().plotHeight, 280.0f);
 }
 
-TEST(FrequencyPlotNodeSerializeTest, SizeClampedToMinOnLoad) {
+TEST_CASE("FrequencyPlotNodeSerializeTest SizeClampedToMinOnLoad",
+          "[filterdesigner]") {
   NodeRegistry reg;
   FrequencyPlotNode::Register(reg);
 
@@ -68,16 +72,18 @@ TEST(FrequencyPlotNodeSerializeTest, SizeClampedToMinOnLoad) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<FrequencyPlotNode*>(restored.FindNodeById(1));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_FLOAT_EQ(loaded->Logic().plotWidth,
-                  FrequencyPlotNodeLogic::kMinPlotWidth);
-  EXPECT_FLOAT_EQ(loaded->Logic().plotHeight,
-                  FrequencyPlotNodeLogic::kMinPlotHeight);
+  REQUIRE(loaded != nullptr);
+  CHECK_FLOAT_EQ(loaded->Logic().plotWidth,
+                 FrequencyPlotNodeLogic::kMinPlotWidth);
+  CHECK_FLOAT_EQ(loaded->Logic().plotHeight,
+                 FrequencyPlotNodeLogic::kMinPlotHeight);
 }
 
-TEST(FrequencyPlotNodeSerializeTest, ConsumesUpstreamSignalSpectrum) {
+TEST_CASE("FrequencyPlotNodeSerializeTest ConsumesUpstreamSignalSpectrum",
+          "[filterdesigner]") {
   // Verifies the math the FrequencyPlot's draw() runs against its upstream
   // signal, without needing an ImGui context. Impulse → FrequencyPlot in
   // the canvas would call Spectrum::Compute every frame; verify it on the
@@ -95,12 +101,12 @@ TEST(FrequencyPlotNodeSerializeTest, ConsumesUpstreamSignalSpectrum) {
   fp->inPin("in0")->createLink(impulse->outPin("out"));
 
   const auto* sig = impulse->Logic().Signal();
-  ASSERT_NE(sig, nullptr);
+  REQUIRE(sig != nullptr);
   auto spec =
       wpi::filterdesigner::Spectrum::Compute(sig->values, sig->sampleRate);
-  ASSERT_TRUE(spec.has_value());
-  EXPECT_FALSE(spec->frequencies.empty());
-  EXPECT_EQ(spec->frequencies.size(), spec->magnitudesDb.size());
+  REQUIRE(spec.has_value());
+  CHECK_FALSE(spec->frequencies.empty());
+  CHECK(spec->frequencies.size() == spec->magnitudesDb.size());
 }
 
 }  // namespace

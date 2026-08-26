@@ -6,31 +6,33 @@
 
 #include <vector>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
+
+#include "TestAssertions.hpp"
 
 namespace {
 
 using wpi::filterdesigner::Signal;
 
-TEST(SignalTest, InferSampleRateEmpty) {
+TEST_CASE("SignalTest InferSampleRateEmpty", "[filterdesigner]") {
   std::vector<double> ts;
-  EXPECT_EQ(Signal::InferSampleRate(ts), 0.0);
+  CHECK(Signal::InferSampleRate(ts) == 0.0);
 }
 
-TEST(SignalTest, InferSampleRateSingleSample) {
+TEST_CASE("SignalTest InferSampleRateSingleSample", "[filterdesigner]") {
   std::vector<double> ts{0.1};
-  EXPECT_EQ(Signal::InferSampleRate(ts), 0.0);
+  CHECK(Signal::InferSampleRate(ts) == 0.0);
 }
 
-TEST(SignalTest, InferSampleRateUniform1kHz) {
+TEST_CASE("SignalTest InferSampleRateUniform1kHz", "[filterdesigner]") {
   std::vector<double> ts;
   for (int i = 0; i < 100; ++i) {
     ts.push_back(i * 0.001);
   }
-  EXPECT_NEAR(Signal::InferSampleRate(ts), 1000.0, 1e-9);
+  CHECK_NEAR(Signal::InferSampleRate(ts), 1000.0, 1e-9);
 }
 
-TEST(SignalTest, InferSampleRateRobustToOutlierGap) {
+TEST_CASE("SignalTest InferSampleRateRobustToOutlierGap", "[filterdesigner]") {
   // 50 Hz sampling with one 10x gap in the middle; median should survive.
   std::vector<double> ts;
   for (int i = 0; i < 20; ++i) {
@@ -40,42 +42,43 @@ TEST(SignalTest, InferSampleRateRobustToOutlierGap) {
   for (int i = 0; i < 20; ++i) {
     ts.push_back(ts.back() + 0.02);
   }
-  EXPECT_NEAR(Signal::InferSampleRate(ts), 50.0, 1e-9);
+  CHECK_NEAR(Signal::InferSampleRate(ts), 50.0, 1e-9);
 }
 
-TEST(SignalTest, InferSampleRateZeroForNonPositivePeriod) {
+TEST_CASE("SignalTest InferSampleRateZeroForNonPositivePeriod",
+          "[filterdesigner]") {
   std::vector<double> ts{0.0, 0.0, 0.0, 0.0};
-  EXPECT_EQ(Signal::InferSampleRate(ts), 0.0);
+  CHECK(Signal::InferSampleRate(ts) == 0.0);
 }
 
-TEST(SignalTest, IsUniformTrueForEvenlySpaced) {
+TEST_CASE("SignalTest IsUniformTrueForEvenlySpaced", "[filterdesigner]") {
   std::vector<double> ts;
   for (int i = 0; i < 50; ++i) {
     ts.push_back(i * 0.01);
   }
-  EXPECT_TRUE(Signal::IsUniform(ts));
+  CHECK(Signal::IsUniform(ts));
 }
 
-TEST(SignalTest, IsUniformFalseWithOneOffGap) {
+TEST_CASE("SignalTest IsUniformFalseWithOneOffGap", "[filterdesigner]") {
   std::vector<double> ts;
   for (int i = 0; i < 10; ++i) {
     ts.push_back(i * 0.01);
   }
   ts.push_back(ts.back() + 0.05);
-  EXPECT_FALSE(Signal::IsUniform(ts));
+  CHECK_FALSE(Signal::IsUniform(ts));
 }
 
-TEST(SignalTest, IsUniformFalseForEmptyOrSingle) {
+TEST_CASE("SignalTest IsUniformFalseForEmptyOrSingle", "[filterdesigner]") {
   std::vector<double> empty;
-  EXPECT_FALSE(Signal::IsUniform(empty));
+  CHECK_FALSE(Signal::IsUniform(empty));
   std::vector<double> one{1.0};
-  EXPECT_FALSE(Signal::IsUniform(one));
+  CHECK_FALSE(Signal::IsUniform(one));
 }
 
-TEST(SignalTest, IsUniformToleranceRespected) {
+TEST_CASE("SignalTest IsUniformToleranceRespected", "[filterdesigner]") {
   std::vector<double> ts{0.0, 0.01, 0.02000001, 0.03};
-  EXPECT_TRUE(Signal::IsUniform(ts, 1e-4));
-  EXPECT_FALSE(Signal::IsUniform(ts, 1e-9));
+  CHECK(Signal::IsUniform(ts, 1e-4));
+  CHECK_FALSE(Signal::IsUniform(ts, 1e-9));
 }
 
 }  // namespace

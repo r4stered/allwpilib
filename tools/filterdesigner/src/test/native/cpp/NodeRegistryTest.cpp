@@ -9,7 +9,7 @@
 #include <typeindex>
 #include <utility>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
@@ -38,18 +38,19 @@ NodeRegistry::Entry MakeEntry(const std::string& tag) {
   return entry;
 }
 
-TEST(NodeRegistryTest, RegisterAndFindByTag) {
+TEST_CASE("NodeRegistryTest RegisterAndFindByTag", "[filterdesigner]") {
   NodeRegistry reg;
   reg.Register(MakeEntry("Alpha"));
   reg.Register(MakeEntry("Beta"));
 
-  EXPECT_NE(reg.FindByTag("Alpha"), nullptr);
-  EXPECT_NE(reg.FindByTag("Beta"), nullptr);
-  EXPECT_EQ(reg.FindByTag("Gamma"), nullptr);
-  EXPECT_EQ(reg.All().size(), 2u);
+  CHECK(reg.FindByTag("Alpha") != nullptr);
+  CHECK(reg.FindByTag("Beta") != nullptr);
+  CHECK(reg.FindByTag("Gamma") == nullptr);
+  CHECK(reg.All().size() == 2u);
 }
 
-TEST(NodeRegistryTest, ReRegisterReplacesPreviousEntry) {
+TEST_CASE("NodeRegistryTest ReRegisterReplacesPreviousEntry",
+          "[filterdesigner]") {
   NodeRegistry reg;
   auto first = MakeEntry("Alpha");
   first.menuLabel = "First";
@@ -59,21 +60,21 @@ TEST(NodeRegistryTest, ReRegisterReplacesPreviousEntry) {
   second.menuLabel = "Second";
   reg.Register(std::move(second));
 
-  ASSERT_EQ(reg.All().size(), 1u);
-  EXPECT_EQ(reg.FindByTag("Alpha")->menuLabel, "Second");
+  REQUIRE(reg.All().size() == 1u);
+  CHECK(reg.FindByTag("Alpha")->menuLabel == "Second");
 }
 
-TEST(NodeRegistryTest, FactoryProducesNodeOnGraph) {
+TEST_CASE("NodeRegistryTest FactoryProducesNodeOnGraph", "[filterdesigner]") {
   NodeRegistry reg;
   reg.Register(MakeEntry("Alpha"));
 
   Graph graph;
   auto node = reg.FindByTag("Alpha")->factory(graph, ImVec2{10.0f, 20.0f});
-  ASSERT_NE(node, nullptr);
-  EXPECT_EQ(node->TypeTag(), "Alpha");
-  EXPECT_GT(node->GraphId(), 0)
-      << "Graph::AddNode should assign a graph-local id";
-  EXPECT_EQ(graph.Nodes().size(), 1u);
+  REQUIRE(node != nullptr);
+  CHECK(node->TypeTag() == "Alpha");
+  UNSCOPED_INFO("Graph::AddNode should assign a graph-local id");
+  CHECK(node->GraphId() > 0);
+  CHECK(graph.Nodes().size() == 1u);
 }
 
 }  // namespace

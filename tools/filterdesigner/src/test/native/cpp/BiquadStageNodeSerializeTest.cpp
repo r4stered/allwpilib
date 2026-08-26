@@ -6,8 +6,9 @@
 #include <string>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/graph/Serialize.hpp"
@@ -36,7 +37,7 @@ void RegisterAll(NodeRegistry& reg) {
   BodePlotNode::Register(reg);
 }
 
-TEST(BiquadStageNodeSerializeTest, ParamsRoundTrip) {
+TEST_CASE("BiquadStageNodeSerializeTest ParamsRoundTrip", "[filterdesigner]") {
   NodeRegistry reg;
   RegisterAll(reg);
 
@@ -55,19 +56,21 @@ TEST(BiquadStageNodeSerializeTest, ParamsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<BiquadStageNode*>(restored.FindNodeById(stageId));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_DOUBLE_EQ(loaded->Logic().sampleRate, 2500.0);
-  EXPECT_FALSE(loaded->Logic().sampleRateAutoSync);
-  EXPECT_EQ(loaded->Logic().stage.kind, StageKind::HighPass);
-  EXPECT_EQ(loaded->Logic().stage.family, Family::Chebyshev1);
-  EXPECT_EQ(loaded->Logic().stage.order, 6);
-  EXPECT_DOUBLE_EQ(loaded->Logic().stage.f1, 250.0);
-  EXPECT_DOUBLE_EQ(loaded->Logic().stage.passbandRippleDb, 1.5);
+  REQUIRE(loaded != nullptr);
+  CHECK_DOUBLE_EQ(loaded->Logic().sampleRate, 2500.0);
+  CHECK_FALSE(loaded->Logic().sampleRateAutoSync);
+  CHECK(loaded->Logic().stage.kind == StageKind::HighPass);
+  CHECK(loaded->Logic().stage.family == Family::Chebyshev1);
+  CHECK(loaded->Logic().stage.order == 6);
+  CHECK_DOUBLE_EQ(loaded->Logic().stage.f1, 250.0);
+  CHECK_DOUBLE_EQ(loaded->Logic().stage.passbandRippleDb, 1.5);
 }
 
-TEST(BiquadStageNodeSerializeTest, AutoSampleRateFlagRoundTrips) {
+TEST_CASE("BiquadStageNodeSerializeTest AutoSampleRateFlagRoundTrips",
+          "[filterdesigner]") {
   // The default for a freshly-added stage is auto=true; verify the flag
   // survives save/load and that the explicit-false case also round-trips.
   NodeRegistry reg;
@@ -76,7 +79,7 @@ TEST(BiquadStageNodeSerializeTest, AutoSampleRateFlagRoundTrips) {
   Graph graph;
   auto autoStage = graph.AddNode<BiquadStageNode>(ImVec2{0.0f, 0.0f});
   auto manualStage = graph.AddNode<BiquadStageNode>(ImVec2{200.0f, 0.0f});
-  ASSERT_TRUE(autoStage->Logic().sampleRateAutoSync);  // default
+  REQUIRE(autoStage->Logic().sampleRateAutoSync);  // default
   manualStage->Logic().sampleRateAutoSync = false;
   int autoId = autoStage->GraphId();
   int manualId = manualStage->GraphId();
@@ -84,18 +87,20 @@ TEST(BiquadStageNodeSerializeTest, AutoSampleRateFlagRoundTrips) {
   std::string json = SerializeGraph(graph);
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loadedAuto =
       dynamic_cast<BiquadStageNode*>(restored.FindNodeById(autoId));
   auto* loadedManual =
       dynamic_cast<BiquadStageNode*>(restored.FindNodeById(manualId));
-  ASSERT_NE(loadedAuto, nullptr);
-  ASSERT_NE(loadedManual, nullptr);
-  EXPECT_TRUE(loadedAuto->Logic().sampleRateAutoSync);
-  EXPECT_FALSE(loadedManual->Logic().sampleRateAutoSync);
+  REQUIRE(loadedAuto != nullptr);
+  REQUIRE(loadedManual != nullptr);
+  CHECK(loadedAuto->Logic().sampleRateAutoSync);
+  CHECK_FALSE(loadedManual->Logic().sampleRateAutoSync);
 }
 
-TEST(BiquadStageNodeSerializeTest, ToBodePlotLinkRoundTrips) {
+TEST_CASE("BiquadStageNodeSerializeTest ToBodePlotLinkRoundTrips",
+          "[filterdesigner]") {
   NodeRegistry reg;
   RegisterAll(reg);
 
@@ -111,16 +116,18 @@ TEST(BiquadStageNodeSerializeTest, ToBodePlotLinkRoundTrips) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto links = restored.Links();
-  ASSERT_EQ(links.size(), 1u);
-  EXPECT_EQ(links[0].srcId, stageId);
-  EXPECT_EQ(links[0].dstId, bodeId);
-  EXPECT_EQ(links[0].srcPin, "filter");
-  EXPECT_EQ(links[0].dstPin, "in0");
+  REQUIRE(links.size() == 1u);
+  CHECK(links[0].srcId == stageId);
+  CHECK(links[0].dstId == bodeId);
+  CHECK(links[0].srcPin == "filter");
+  CHECK(links[0].dstPin == "in0");
 }
 
-TEST(BiquadStageNodeSerializeTest, SignalPassthroughLinkRoundTrips) {
+TEST_CASE("BiquadStageNodeSerializeTest SignalPassthroughLinkRoundTrips",
+          "[filterdesigner]") {
   NodeRegistry reg;
   RegisterAll(reg);
 
@@ -136,8 +143,9 @@ TEST(BiquadStageNodeSerializeTest, SignalPassthroughLinkRoundTrips) {
   std::string json = SerializeGraph(graph);
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
-  ASSERT_EQ(restored.Links().size(), 2u);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(restored.Links().size() == 2u);
 
   bool foundSrcToA = false;
   bool foundAToB = false;
@@ -148,11 +156,13 @@ TEST(BiquadStageNodeSerializeTest, SignalPassthroughLinkRoundTrips) {
       foundAToB = true;
     }
   }
-  EXPECT_TRUE(foundSrcToA);
-  EXPECT_TRUE(foundAToB);
+  CHECK(foundSrcToA);
+  CHECK(foundAToB);
 }
 
-TEST(BiquadStageNodeSerializeTest, MultiStageSignalPassThroughActuallyFilters) {
+TEST_CASE(
+    "BiquadStageNodeSerializeTest MultiStageSignalPassThroughActuallyFilters",
+    "[filterdesigner]") {
   // Two BiquadStages chained on the Signal pass-through. Drive a synthetic
   // input through stage A's Filtered(), then through stage B's Filtered()
   // and verify both stages produce a same-length output that isn't a copy
@@ -177,15 +187,15 @@ TEST(BiquadStageNodeSerializeTest, MultiStageSignalPassThroughActuallyFilters) {
   a.sampleRate = 1000.0;
   a.stage.f1 = 100.0;
   const Signal* afterA = a.Filtered(&in);
-  ASSERT_NE(afterA, nullptr);
-  ASSERT_EQ(afterA->values.size(), in.values.size());
+  REQUIRE(afterA != nullptr);
+  REQUIRE(afterA->values.size() == in.values.size());
 
   BiquadStageNodeLogic b;
   b.sampleRate = 1000.0;
   b.stage.f1 = 50.0;
   const Signal* afterB = b.Filtered(afterA);
-  ASSERT_NE(afterB, nullptr);
-  ASSERT_EQ(afterB->values.size(), afterA->values.size());
+  REQUIRE(afterB != nullptr);
+  REQUIRE(afterB->values.size() == afterA->values.size());
 
   // The two cascade outputs should differ at the back of the buffer where
   // the filter has had time to integrate — if Filtered() ever silently
@@ -198,8 +208,8 @@ TEST(BiquadStageNodeSerializeTest, MultiStageSignalPassThroughActuallyFilters) {
       break;
     }
   }
-  EXPECT_TRUE(anyDifferent)
-      << "Chained Filtered() should compose, not pass through";
+  UNSCOPED_INFO("Chained Filtered() should compose, not pass through");
+  CHECK(anyDifferent);
 }
 
 }  // namespace

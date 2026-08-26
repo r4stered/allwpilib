@@ -21,6 +21,8 @@ ext {
 
 apply from: "${rootDir}/shared/config.gradle"
 apply from: "${rootDir}/shared/resources.gradle"
+apply from: "${rootDir}/shared/catch2.gradle"
+apply from: "${rootDir}/shared/libsdlgpu.gradle"
 
 def wpilibVersionFileInput = file("src/main/generate/WPILibVersion.cpp.in")
 def wpilibVersionFileOutput = file("$buildDir/generated/main/cpp/WPILibVersion.cpp")
@@ -103,17 +105,10 @@ model {
                     // when included transitively; keep warnings but don't fail.
                     it.cppCompiler.args '-Wno-error=shadow', '-Wno-error=comment'
                 }
-                if (it.targetPlatform.operatingSystem.isWindows()) {
-                    it.linker.args << 'Gdi32.lib' << 'Shell32.lib' << 'd3d11.lib' << 'd3dcompiler.lib'
-                } else if (it.targetPlatform.operatingSystem.isMacOsX()) {
-                    it.linker.args << '-framework' << 'Metal' << '-framework' << 'MetalKit' << '-framework' << 'Cocoa' << '-framework' << 'IOKit' << '-framework' << 'CoreFoundation' << '-framework' << 'CoreVideo' << '-framework' << 'QuartzCore'
+                project.addLibSdlGpuDependency(it)
+                if (it.targetPlatform.operatingSystem.isMacOsX()) {
                     if (it.buildType.getName() == "release") {
                         it.linker.args << '-s'
-                    }
-                } else {
-                    it.linker.args << '-lX11'
-                    if (it.targetPlatform.name.startsWith('linuxarm')) {
-                        it.linker.args << '-lGL'
                     }
                 }
             }
@@ -147,17 +142,10 @@ model {
                 if (!(toolChain in VisualCpp)) {
                     it.cppCompiler.args '-Wno-error=shadow', '-Wno-error=comment'
                 }
-                if (it.targetPlatform.operatingSystem.isWindows()) {
-                    it.linker.args << 'Gdi32.lib' << 'Shell32.lib' << 'd3d11.lib' << 'd3dcompiler.lib'
-                } else if (it.targetPlatform.operatingSystem.isMacOsX()) {
-                    it.linker.args << '-framework' << 'Metal' << '-framework' << 'MetalKit' << '-framework' << 'Cocoa' << '-framework' << 'IOKit' << '-framework' << 'CoreFoundation' << '-framework' << 'CoreVideo' << '-framework' << 'QuartzCore'
+                project.addLibSdlGpuDependency(it)
+                if (it.targetPlatform.operatingSystem.isMacOsX()) {
                     if (it.buildType.getName() == "release") {
                         it.linker.args << '-s'
-                    }
-                } else {
-                    it.linker.args << '-lX11'
-                    if (it.targetPlatform.name.startsWith('linuxarm')) {
-                        it.linker.args << '-lGL'
                     }
                 }
 

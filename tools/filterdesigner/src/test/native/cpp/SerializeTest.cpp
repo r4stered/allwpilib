@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
@@ -83,7 +83,7 @@ void RegisterFakes(NodeRegistry& reg) {
   reg.Register(std::move(sink));
 }
 
-TEST(SerializeTest, EmptyGraphRoundTrips) {
+TEST_CASE("SerializeTest EmptyGraphRoundTrips", "[filterdesigner]") {
   Graph graph;
   NodeRegistry reg;
   RegisterFakes(reg);
@@ -92,12 +92,13 @@ TEST(SerializeTest, EmptyGraphRoundTrips) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  EXPECT_TRUE(result.ok()) << result.error;
-  EXPECT_TRUE(restored.Nodes().empty());
-  EXPECT_TRUE(restored.Links().empty());
+  UNSCOPED_INFO(result.error);
+  CHECK(result.ok());
+  CHECK(restored.Nodes().empty());
+  CHECK(restored.Links().empty());
 }
 
-TEST(SerializeTest, SourceSinkPairRoundTrips) {
+TEST_CASE("SerializeTest SourceSinkPairRoundTrips", "[filterdesigner]") {
   NodeRegistry reg;
   RegisterFakes(reg);
 
@@ -114,26 +115,29 @@ TEST(SerializeTest, SourceSinkPairRoundTrips) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
-  ASSERT_EQ(restored.Nodes().size(), 2u);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(restored.Nodes().size() == 2u);
 
   auto* restoredSrc =
       dynamic_cast<FakeSourceNode*>(restored.FindNodeById(srcId));
   auto* restoredSink =
       dynamic_cast<FakeSinkNode*>(restored.FindNodeById(sinkId));
-  ASSERT_NE(restoredSrc, nullptr);
-  ASSERT_NE(restoredSink, nullptr);
-  EXPECT_EQ(restoredSrc->m_value, 42) << "per-node params round-trip";
+  REQUIRE(restoredSrc != nullptr);
+  REQUIRE(restoredSink != nullptr);
+  UNSCOPED_INFO("per-node params round-trip");
+  CHECK(restoredSrc->m_value == 42);
 
   auto links = restored.Links();
-  ASSERT_EQ(links.size(), 1u);
-  EXPECT_EQ(links[0].srcId, srcId);
-  EXPECT_EQ(links[0].dstId, sinkId);
-  EXPECT_EQ(links[0].srcPin, "out");
-  EXPECT_EQ(links[0].dstPin, "in");
+  REQUIRE(links.size() == 1u);
+  CHECK(links[0].srcId == srcId);
+  CHECK(links[0].dstId == sinkId);
+  CHECK(links[0].srcPin == "out");
+  CHECK(links[0].dstPin == "in");
 }
 
-TEST(SerializeTest, V1FileIsRejectedWithUserFacingMessage) {
+TEST_CASE("SerializeTest V1FileIsRejectedWithUserFacingMessage",
+          "[filterdesigner]") {
   NodeRegistry reg;
   RegisterFakes(reg);
 
@@ -144,25 +148,27 @@ TEST(SerializeTest, V1FileIsRejectedWithUserFacingMessage) {
   // v1 was the pre-node-graph format; it must be rejected explicitly.
   std::string v1 = R"({"version": 1, "nodes": [], "links": []})";
   auto result = DeserializeGraph(v1, graph, reg);
-  EXPECT_FALSE(result.ok());
-  EXPECT_NE(result.error.find("older format"), std::string::npos)
-      << "error should call out the v1/older format, was: " << result.error;
+  CHECK_FALSE(result.ok());
+  UNSCOPED_INFO(
+      "error should call out the v1/older format, was: " << result.error);
+  CHECK(result.error.find("older format") != std::string::npos);
   // Failed loads must not partially clobber the live graph (the deserializer
   // calls Reset() only after the version check passes).
-  EXPECT_FALSE(graph.Nodes().empty());
+  CHECK_FALSE(graph.Nodes().empty());
 }
 
-TEST(SerializeTest, MissingVersionTreatedAsV1) {
+TEST_CASE("SerializeTest MissingVersionTreatedAsV1", "[filterdesigner]") {
   NodeRegistry reg;
   RegisterFakes(reg);
 
   Graph graph;
   std::string noVersion = R"({"nodes": [], "links": []})";
   auto result = DeserializeGraph(noVersion, graph, reg);
-  EXPECT_FALSE(result.ok());
+  CHECK_FALSE(result.ok());
 }
 
-TEST(SerializeTest, UnknownNodeTypeSkippedWithWarning) {
+TEST_CASE("SerializeTest UnknownNodeTypeSkippedWithWarning",
+          "[filterdesigner]") {
   NodeRegistry reg;
   RegisterFakes(reg);
 
@@ -181,17 +187,20 @@ TEST(SerializeTest, UnknownNodeTypeSkippedWithWarning) {
 
   Graph graph;
   auto result = DeserializeGraph(json, graph, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
-  EXPECT_FALSE(result.warnings.empty()) << "unknown type should warn";
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  UNSCOPED_INFO("unknown type should warn");
+  CHECK_FALSE(result.warnings.empty());
 
   auto nodes = graph.Nodes();
-  ASSERT_EQ(nodes.size(), 1u);
-  EXPECT_EQ(nodes[0]->TypeTag(), "FakeSource");
-  EXPECT_EQ(dynamic_cast<FakeSourceNode*>(nodes[0])->m_value, 99);
-  EXPECT_TRUE(graph.Links().empty());
+  REQUIRE(nodes.size() == 1u);
+  CHECK(nodes[0]->TypeTag() == "FakeSource");
+  CHECK(dynamic_cast<FakeSourceNode*>(nodes[0])->m_value == 99);
+  CHECK(graph.Links().empty());
 }
 
-TEST(SerializeTest, UnknownPinNameSkippedWithWarning) {
+TEST_CASE("SerializeTest UnknownPinNameSkippedWithWarning",
+          "[filterdesigner]") {
   // Pre-fix, BaseNode::inPin/outPin asserted on miss + dereffed end() in
   // release builds — so a stale or hand-edited file referencing a pin name
   // that doesn't exist on the node would UB-deref instead of warning. Now
@@ -213,15 +222,16 @@ TEST(SerializeTest, UnknownPinNameSkippedWithWarning) {
 
   Graph graph;
   auto result = DeserializeGraph(json, graph, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
-  EXPECT_FALSE(result.warnings.empty())
-      << "missing pin must surface as a warning";
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  UNSCOPED_INFO("missing pin must surface as a warning");
+  CHECK_FALSE(result.warnings.empty());
   // Both nodes still loaded, but the link did not.
-  EXPECT_EQ(graph.Nodes().size(), 2u);
-  EXPECT_TRUE(graph.Links().empty());
+  CHECK(graph.Nodes().size() == 2u);
+  CHECK(graph.Links().empty());
 }
 
-TEST(SerializeTest, NonNumericPosSkippedWithWarning) {
+TEST_CASE("SerializeTest NonNumericPosSkippedWithWarning", "[filterdesigner]") {
   // Pre-fix, pos[0].get_number() would throw/abort in release builds on a
   // malformed pos field. Now the loader validates types and skips the
   // offending node with a warning.
@@ -238,13 +248,16 @@ TEST(SerializeTest, NonNumericPosSkippedWithWarning) {
 
   Graph graph;
   auto result = DeserializeGraph(json, graph, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
-  EXPECT_FALSE(result.warnings.empty())
-      << "non-numeric pos must surface as a warning";
-  EXPECT_TRUE(graph.Nodes().empty()) << "bad node must be skipped";
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  UNSCOPED_INFO("non-numeric pos must surface as a warning");
+  CHECK_FALSE(result.warnings.empty());
+  UNSCOPED_INFO("bad node must be skipped");
+  CHECK(graph.Nodes().empty());
 }
 
-TEST(SerializeTest, GraphResetCallbackFiresOnDeserialize) {
+TEST_CASE("SerializeTest GraphResetCallbackFiresOnDeserialize",
+          "[filterdesigner]") {
   // GraphEditor relies on the OnReset hook to re-attach the CreationPopup
   // after the deserializer rebuilds the underlying ImNodeFlow. Pin that
   // contract here so a future refactor of Graph::Reset can't silently drop
@@ -258,15 +271,18 @@ TEST(SerializeTest, GraphResetCallbackFiresOnDeserialize) {
 
   std::string empty = R"({"version": 2, "nodes": [], "links": []})";
   auto result = DeserializeGraph(empty, graph, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
-  EXPECT_EQ(hits, 1) << "Reset (via deserialize) must fire the callback";
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  UNSCOPED_INFO("Reset (via deserialize) must fire the callback");
+  CHECK(hits == 1);
 
   // Direct Reset() also fires it.
   graph.Reset();
-  EXPECT_EQ(hits, 2);
+  CHECK(hits == 2);
 }
 
-TEST(SerializeTest, NewNodesAfterLoadDontCollideWithLoadedIds) {
+TEST_CASE("SerializeTest NewNodesAfterLoadDontCollideWithLoadedIds",
+          "[filterdesigner]") {
   NodeRegistry reg;
   RegisterFakes(reg);
 
@@ -281,11 +297,12 @@ TEST(SerializeTest, NewNodesAfterLoadDontCollideWithLoadedIds) {
 
   Graph graph;
   auto result = DeserializeGraph(json, graph, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
 
   // The next added node should get id > 12, not collide with a loaded one.
   auto fresh = graph.AddNode<FakeSourceNode>(ImVec2{200.0f, 0.0f});
-  EXPECT_GT(fresh->GraphId(), 12);
+  CHECK(fresh->GraphId() > 12);
 }
 
 }  // namespace

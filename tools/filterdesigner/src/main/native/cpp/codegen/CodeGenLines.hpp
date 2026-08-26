@@ -4,12 +4,11 @@
 
 #pragma once
 
+#include <format>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
-
-#include <fmt/format.h>
 
 namespace wpi::filterdesigner::detail {
 
@@ -51,7 +50,7 @@ inline Lines PrefixLines(const Lines& body, std::string_view prefix) {
   Lines out;
   out.reserve(body.size());
   for (const auto& line : body) {
-    out.push_back(fmt::format("{}{}", prefix, line));
+    out.push_back(std::format("{}{}", prefix, line));
   }
   return out;
 }

@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <string>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/codegen/CodeGen.hpp"
 #include "wpi/filterdesigner/model/Stage.hpp"
@@ -45,159 +45,167 @@ ExportSpec SimpleSpec() {
 
 // IsValidIdentifier ----------------------------------------------------------
 
-TEST(ExportIdentifierTest, RejectsEmpty) {
-  EXPECT_FALSE(IsValidIdentifier(""));
+TEST_CASE("ExportIdentifierTest RejectsEmpty", "[filterdesigner]") {
+  CHECK_FALSE(IsValidIdentifier(""));
 }
 
-TEST(ExportIdentifierTest, RejectsLeadingDigit) {
-  EXPECT_FALSE(IsValidIdentifier("9abc"));
+TEST_CASE("ExportIdentifierTest RejectsLeadingDigit", "[filterdesigner]") {
+  CHECK_FALSE(IsValidIdentifier("9abc"));
 }
 
-TEST(ExportIdentifierTest, RejectsHyphen) {
-  EXPECT_FALSE(IsValidIdentifier("foo-bar"));
+TEST_CASE("ExportIdentifierTest RejectsHyphen", "[filterdesigner]") {
+  CHECK_FALSE(IsValidIdentifier("foo-bar"));
 }
 
-TEST(ExportIdentifierTest, RejectsSpace) {
-  EXPECT_FALSE(IsValidIdentifier("foo bar"));
+TEST_CASE("ExportIdentifierTest RejectsSpace", "[filterdesigner]") {
+  CHECK_FALSE(IsValidIdentifier("foo bar"));
 }
 
-TEST(ExportIdentifierTest, AcceptsLeadingUnderscore) {
-  EXPECT_TRUE(IsValidIdentifier("_foo"));
+TEST_CASE("ExportIdentifierTest AcceptsLeadingUnderscore", "[filterdesigner]") {
+  CHECK(IsValidIdentifier("_foo"));
 }
 
-TEST(ExportIdentifierTest, AcceptsAlphanumericAndUnderscore) {
-  EXPECT_TRUE(IsValidIdentifier("Shooter_Filter_2"));
+TEST_CASE("ExportIdentifierTest AcceptsAlphanumericAndUnderscore",
+          "[filterdesigner]") {
+  CHECK(IsValidIdentifier("Shooter_Filter_2"));
 }
 
-TEST(ExportIdentifierTest, AcceptsSingleLetter) {
-  EXPECT_TRUE(IsValidIdentifier("X"));
+TEST_CASE("ExportIdentifierTest AcceptsSingleLetter", "[filterdesigner]") {
+  CHECK(IsValidIdentifier("X"));
 }
 
 // ToSnakeCase ----------------------------------------------------------------
 
-TEST(ExportSnakeCaseTest, EmptyStaysEmpty) {
-  EXPECT_EQ(ToSnakeCase(""), "");
+TEST_CASE("ExportSnakeCaseTest EmptyStaysEmpty", "[filterdesigner]") {
+  CHECK(ToSnakeCase("") == "");
 }
 
-TEST(ExportSnakeCaseTest, AllLowerStaysSame) {
-  EXPECT_EQ(ToSnakeCase("foo"), "foo");
+TEST_CASE("ExportSnakeCaseTest AllLowerStaysSame", "[filterdesigner]") {
+  CHECK(ToSnakeCase("foo") == "foo");
 }
 
-TEST(ExportSnakeCaseTest, PascalCaseToSnake) {
-  EXPECT_EQ(ToSnakeCase("ShooterFilter"), "shooter_filter");
+TEST_CASE("ExportSnakeCaseTest PascalCaseToSnake", "[filterdesigner]") {
+  CHECK(ToSnakeCase("ShooterFilter") == "shooter_filter");
 }
 
-TEST(ExportSnakeCaseTest, AbbreviationRunBoundary) {
+TEST_CASE("ExportSnakeCaseTest AbbreviationRunBoundary", "[filterdesigner]") {
   // The abbreviation/word boundary should land just before the trailing
   // single-word capital — `MyHTTPServer` → `my_http_server`.
-  EXPECT_EQ(ToSnakeCase("MyHTTPServer"), "my_http_server");
+  CHECK(ToSnakeCase("MyHTTPServer") == "my_http_server");
 }
 
-TEST(ExportSnakeCaseTest, DigitBoundary) {
-  EXPECT_EQ(ToSnakeCase("Filter2Stage"), "filter2_stage");
+TEST_CASE("ExportSnakeCaseTest DigitBoundary", "[filterdesigner]") {
+  CHECK(ToSnakeCase("Filter2Stage") == "filter2_stage");
 }
 
-TEST(ExportSnakeCaseTest, LeadingUnderscorePreserved) {
-  EXPECT_EQ(ToSnakeCase("_FooBar"), "_foo_bar");
+TEST_CASE("ExportSnakeCaseTest LeadingUnderscorePreserved",
+          "[filterdesigner]") {
+  CHECK(ToSnakeCase("_FooBar") == "_foo_bar");
 }
 
 // NormalizeProjectRoot -------------------------------------------------------
 
-TEST(ExportNormalizeRootTest, EmptyStaysEmpty) {
-  EXPECT_TRUE(NormalizeProjectRoot({}).empty());
+TEST_CASE("ExportNormalizeRootTest EmptyStaysEmpty", "[filterdesigner]") {
+  CHECK(NormalizeProjectRoot({}).empty());
 }
 
-TEST(ExportNormalizeRootTest, AbsolutePathStaysAbsolute) {
+TEST_CASE("ExportNormalizeRootTest AbsolutePathStaysAbsolute",
+          "[filterdesigner]") {
   auto result = NormalizeProjectRoot("/tmp/whatever");
-  EXPECT_TRUE(result.is_absolute());
-  EXPECT_EQ(result.filename(), "whatever");
+  CHECK(result.is_absolute());
+  CHECK(result.filename() == "whatever");
 }
 
-TEST(ExportNormalizeRootTest, RelativePathBecomesAbsolute) {
+TEST_CASE("ExportNormalizeRootTest RelativePathBecomesAbsolute",
+          "[filterdesigner]") {
   auto result = NormalizeProjectRoot("relative/path");
-  EXPECT_TRUE(result.is_absolute());
+  CHECK(result.is_absolute());
 }
 
 // ResolveExportPath ----------------------------------------------------------
 
-TEST(ExportResolvePathTest, JavaPathLayout) {
+TEST_CASE("ExportResolvePathTest JavaPathLayout", "[filterdesigner]") {
   auto p = ResolveExportPath("/work/robot", Language::Java, "ShooterFilter");
   // `/work/robot/src/main/java/frc/robot/filters/ShooterFilter.java`
-  EXPECT_EQ(p.filename(), "ShooterFilter.java");
-  EXPECT_EQ(p.parent_path().filename(), "filters");
-  EXPECT_EQ(p.parent_path().parent_path().filename(), "robot");
-  EXPECT_EQ(p.parent_path().parent_path().parent_path().filename(), "frc");
+  CHECK(p.filename() == "ShooterFilter.java");
+  CHECK(p.parent_path().filename() == "filters");
+  CHECK(p.parent_path().parent_path().filename() == "robot");
+  CHECK(p.parent_path().parent_path().parent_path().filename() == "frc");
 }
 
-TEST(ExportResolvePathTest, CppPathLayout) {
+TEST_CASE("ExportResolvePathTest CppPathLayout", "[filterdesigner]") {
   auto p = ResolveExportPath("/work/robot", Language::Cpp, "ShooterFilter");
   // `/work/robot/src/main/include/filters/ShooterFilter.h`
-  EXPECT_EQ(p.filename(), "ShooterFilter.h");
-  EXPECT_EQ(p.parent_path().filename(), "filters");
-  EXPECT_EQ(p.parent_path().parent_path().filename(), "include");
+  CHECK(p.filename() == "ShooterFilter.h");
+  CHECK(p.parent_path().filename() == "filters");
+  CHECK(p.parent_path().parent_path().filename() == "include");
 }
 
-TEST(ExportResolvePathTest, PythonPathLayoutSnakeCase) {
+TEST_CASE("ExportResolvePathTest PythonPathLayoutSnakeCase",
+          "[filterdesigner]") {
   auto p = ResolveExportPath("/work/robot", Language::Python, "ShooterFilter");
-  EXPECT_EQ(p.filename(), "shooter_filter.py");
-  EXPECT_EQ(p.parent_path().filename(), "filters");
+  CHECK(p.filename() == "shooter_filter.py");
+  CHECK(p.parent_path().filename() == "filters");
 }
 
 // BuildExportFileContents ----------------------------------------------------
 
-TEST(ExportBuildContentsTest, EmptySectionsReturnsEmptyString) {
+TEST_CASE("ExportBuildContentsTest EmptySectionsReturnsEmptyString",
+          "[filterdesigner]") {
   Sections empty;
-  EXPECT_TRUE(BuildExportFileContents(empty, Language::Cpp, "Foo", SimpleSpec())
-                  .empty());
+  CHECK(BuildExportFileContents(empty, Language::Cpp, "Foo", SimpleSpec())
+            .empty());
 }
 
-TEST(ExportBuildContentsTest, CppHasHeaderAndClassAndCoeff) {
+TEST_CASE("ExportBuildContentsTest CppHasHeaderAndClassAndCoeff",
+          "[filterdesigner]") {
   auto sections = OnePassthroughSection();
   auto out = BuildExportFileContents(sections, Language::Cpp, "ShooterFilter",
                                      SimpleSpec());
   // Comment header.
-  EXPECT_NE(out.find("DO NOT EDIT"), std::string::npos);
+  CHECK(out.find("DO NOT EDIT") != std::string::npos);
   // Spec description was prefixed with `// `.
-  EXPECT_NE(out.find("// Sample rate: 1000 Hz"), std::string::npos);
+  CHECK(out.find("// Sample rate: 1000 Hz") != std::string::npos);
   // C++-specific shape.
-  EXPECT_NE(out.find("#pragma once"), std::string::npos);
-  EXPECT_NE(out.find("#include <wpi/math/filter/BiquadFilter.hpp>"),
-            std::string::npos);
-  EXPECT_NE(out.find("namespace frc::filters"), std::string::npos);
-  EXPECT_NE(out.find("ShooterFilter()"), std::string::npos);
-  EXPECT_NE(out.find("wpi::math::BiquadFilter"), std::string::npos);
+  CHECK(out.find("#pragma once") != std::string::npos);
+  CHECK(out.find("#include <wpi/math/filter/BiquadFilter.hpp>") !=
+        std::string::npos);
+  CHECK(out.find("namespace frc::filters") != std::string::npos);
+  CHECK(out.find("ShooterFilter()") != std::string::npos);
+  CHECK(out.find("wpi::math::BiquadFilter") != std::string::npos);
 }
 
-TEST(ExportBuildContentsTest, JavaHasPackageAndClassAndImport) {
+TEST_CASE("ExportBuildContentsTest JavaHasPackageAndClassAndImport",
+          "[filterdesigner]") {
   auto sections = OnePassthroughSection();
   auto out = BuildExportFileContents(sections, Language::Java, "ShooterFilter",
                                      SimpleSpec());
-  EXPECT_NE(out.find("DO NOT EDIT"), std::string::npos);
-  EXPECT_NE(out.find("package frc.robot.filters;"), std::string::npos);
-  EXPECT_NE(out.find("import org.wpilib.math.filter.BiquadFilter;"),
-            std::string::npos);
-  EXPECT_NE(out.find("public final class ShooterFilter"), std::string::npos);
-  EXPECT_NE(out.find("BiquadFilter.Section("), std::string::npos);
+  CHECK(out.find("DO NOT EDIT") != std::string::npos);
+  CHECK(out.find("package frc.robot.filters;") != std::string::npos);
+  CHECK(out.find("import org.wpilib.math.filter.BiquadFilter;") !=
+        std::string::npos);
+  CHECK(out.find("public final class ShooterFilter") != std::string::npos);
+  CHECK(out.find("BiquadFilter.Section(") != std::string::npos);
   // Java visibility plumbing — private ctor blocks instantiation.
-  EXPECT_NE(out.find("private ShooterFilter() {}"), std::string::npos);
+  CHECK(out.find("private ShooterFilter() {}") != std::string::npos);
 }
 
-TEST(ExportBuildContentsTest, PythonHasSnakeCaseFunctionAndImport) {
+TEST_CASE("ExportBuildContentsTest PythonHasSnakeCaseFunctionAndImport",
+          "[filterdesigner]") {
   auto sections = OnePassthroughSection();
   auto out = BuildExportFileContents(sections, Language::Python,
                                      "ShooterFilter", SimpleSpec());
-  EXPECT_NE(out.find("# DO NOT EDIT"), std::string::npos);
-  EXPECT_NE(out.find("# Sample rate: 1000 Hz"), std::string::npos);
-  EXPECT_NE(out.find("from wpimath.filter import BiquadFilter"),
-            std::string::npos);
-  EXPECT_NE(out.find("def shooter_filter() -> BiquadFilter"),
-            std::string::npos);
-  EXPECT_NE(out.find("BiquadFilter.Section(b0="), std::string::npos);
+  CHECK(out.find("# DO NOT EDIT") != std::string::npos);
+  CHECK(out.find("# Sample rate: 1000 Hz") != std::string::npos);
+  CHECK(out.find("from wpimath.filter import BiquadFilter") !=
+        std::string::npos);
+  CHECK(out.find("def shooter_filter() -> BiquadFilter") != std::string::npos);
+  CHECK(out.find("BiquadFilter.Section(b0=") != std::string::npos);
 }
 
 // Full-output golden tests. Update on intentional formatting changes.
 
-TEST(ExportBuildContentsTest, CppGoldenFile) {
+TEST_CASE("ExportBuildContentsTest CppGoldenFile", "[filterdesigner]") {
   constexpr std::string_view kGolden =
       "// Generated by WPILib Filter Designer.\n"
       "// DO NOT EDIT \xE2\x80\x94 regenerate via the Filter Designer tool.\n"
@@ -220,12 +228,11 @@ TEST(ExportBuildContentsTest, CppGoldenFile) {
       "}\n"
       "\n"
       "}  // namespace frc::filters\n";
-  EXPECT_EQ(BuildExportFileContents(TwoSectionGolden(), Language::Cpp,
-                                    "ShooterFilter", SimpleSpec()),
-            kGolden);
+  CHECK(BuildExportFileContents(TwoSectionGolden(), Language::Cpp,
+                                "ShooterFilter", SimpleSpec()) == kGolden);
 }
 
-TEST(ExportBuildContentsTest, JavaGoldenFile) {
+TEST_CASE("ExportBuildContentsTest JavaGoldenFile", "[filterdesigner]") {
   constexpr std::string_view kGolden =
       "// Generated by WPILib Filter Designer.\n"
       "// DO NOT EDIT \xE2\x80\x94 regenerate via the Filter Designer tool.\n"
@@ -248,12 +255,11 @@ TEST(ExportBuildContentsTest, JavaGoldenFile) {
       "\n"
       "  private ShooterFilter() {}\n"
       "}\n";
-  EXPECT_EQ(BuildExportFileContents(TwoSectionGolden(), Language::Java,
-                                    "ShooterFilter", SimpleSpec()),
-            kGolden);
+  CHECK(BuildExportFileContents(TwoSectionGolden(), Language::Java,
+                                "ShooterFilter", SimpleSpec()) == kGolden);
 }
 
-TEST(ExportBuildContentsTest, PythonGoldenFile) {
+TEST_CASE("ExportBuildContentsTest PythonGoldenFile", "[filterdesigner]") {
   constexpr std::string_view kGolden =
       "# Generated by WPILib Filter Designer.\n"
       "# DO NOT EDIT \xE2\x80\x94 regenerate via the Filter Designer tool.\n"
@@ -270,39 +276,40 @@ TEST(ExportBuildContentsTest, PythonGoldenFile) {
       "        BiquadFilter.Section(b0=1, b1=0, b2=0, a1=-0.5, a2=0.25),\n"
       "        BiquadFilter.Section(b0=1, b1=2, b2=1, a1=-0.125, a2=0.75),\n"
       "    ])\n";
-  EXPECT_EQ(BuildExportFileContents(TwoSectionGolden(), Language::Python,
-                                    "ShooterFilter", SimpleSpec()),
-            kGolden);
+  CHECK(BuildExportFileContents(TwoSectionGolden(), Language::Python,
+                                "ShooterFilter", SimpleSpec()) == kGolden);
 }
 
 // ExportFilter (round-trip on disk) -----------------------------------------
 
-TEST(ExportFilterTest, RejectsInvalidClassName) {
+TEST_CASE("ExportFilterTest RejectsInvalidClassName", "[filterdesigner]") {
   auto sections = OnePassthroughSection();
   auto root = std::filesystem::temp_directory_path() / "fd_export_test_invalid";
   auto result =
       ExportFilter(sections, Language::Cpp, "9bad", root, SimpleSpec());
-  EXPECT_FALSE(result.ok);
-  EXPECT_NE(result.message.find("Invalid class name"), std::string::npos);
+  CHECK_FALSE(result.ok);
+  CHECK(result.message.find("Invalid class name") != std::string::npos);
 }
 
-TEST(ExportFilterTest, RejectsEmptyRoot) {
+TEST_CASE("ExportFilterTest RejectsEmptyRoot", "[filterdesigner]") {
   auto sections = OnePassthroughSection();
   auto result = ExportFilter(sections, Language::Cpp, "Foo", {}, SimpleSpec());
-  EXPECT_FALSE(result.ok);
-  EXPECT_NE(result.message.find("Project root is empty"), std::string::npos);
+  CHECK_FALSE(result.ok);
+  CHECK(result.message.find("Project root is empty") != std::string::npos);
 }
 
-TEST(ExportFilterTest, WritesFileAndReturnsAbsolutePath) {
+TEST_CASE("ExportFilterTest WritesFileAndReturnsAbsolutePath",
+          "[filterdesigner]") {
   auto sections = OnePassthroughSection();
   auto root = std::filesystem::temp_directory_path() / "fd_export_test_write";
   std::filesystem::remove_all(root);
   auto result =
       ExportFilter(sections, Language::Cpp, "MyFilter", root, SimpleSpec());
-  ASSERT_TRUE(result.ok) << result.message;
-  EXPECT_TRUE(result.writtenPath.is_absolute());
-  EXPECT_TRUE(std::filesystem::exists(result.writtenPath));
-  EXPECT_EQ(result.writtenPath.filename(), "MyFilter.h");
+  UNSCOPED_INFO(result.message);
+  REQUIRE(result.ok);
+  CHECK(result.writtenPath.is_absolute());
+  CHECK(std::filesystem::exists(result.writtenPath));
+  CHECK(result.writtenPath.filename() == "MyFilter.h");
   std::filesystem::remove_all(root);
 }
 

@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/model/Stage.hpp"
 #include "wpi/math/filter/BiquadFilter.hpp"
@@ -26,99 +26,101 @@ Sections SectionsOf(const BiquadFilter& f) {
   return Sections(span.begin(), span.end());
 }
 
-TEST(CodeGenTest, EmptySectionsReturnsEmptyString) {
-  EXPECT_EQ(EmitCode(Sections{}, Language::Cpp), "");
-  EXPECT_EQ(EmitCode(Sections{}, Language::Java), "");
-  EXPECT_EQ(EmitCode(Sections{}, Language::Python), "");
+TEST_CASE("CodeGenTest EmptySectionsReturnsEmptyString", "[filterdesigner]") {
+  CHECK(EmitCode(Sections{}, Language::Cpp) == "");
+  CHECK(EmitCode(Sections{}, Language::Java) == "");
+  CHECK(EmitCode(Sections{}, Language::Python) == "");
 }
 
-TEST(CodeGenTest, CppEmitsBraceInitializedBiquadFilter) {
+TEST_CASE("CodeGenTest CppEmitsBraceInitializedBiquadFilter",
+          "[filterdesigner]") {
   Sections sos{{0.5, 0.25, 0.125, -0.75, 0.25}};
   std::string code = EmitCode(sos, Language::Cpp, "lowpass");
-  EXPECT_NE(code.find("wpi::math::BiquadFilter lowpass{"), std::string::npos);
-  EXPECT_NE(code.find("{0.5, 0.25, 0.125, -0.75, 0.25},"), std::string::npos);
-  EXPECT_EQ(code.back(), '\n');
+  CHECK(code.find("wpi::math::BiquadFilter lowpass{") != std::string::npos);
+  CHECK(code.find("{0.5, 0.25, 0.125, -0.75, 0.25},") != std::string::npos);
+  CHECK(code.back() == '\n');
 }
 
-TEST(CodeGenTest, JavaEmitsVarargsBiquadFilterCtor) {
+TEST_CASE("CodeGenTest JavaEmitsVarargsBiquadFilterCtor", "[filterdesigner]") {
   Sections sos{{0.5, 0.25, 0.125, -0.75, 0.25}};
   std::string code = EmitCode(sos, Language::Java, "lowpass");
-  EXPECT_NE(code.find("BiquadFilter lowpass = new BiquadFilter("),
-            std::string::npos);
-  EXPECT_NE(
-      code.find("new BiquadFilter.Section(0.5, 0.25, 0.125, -0.75, 0.25)"),
-      std::string::npos);
+  CHECK(code.find("BiquadFilter lowpass = new BiquadFilter(") !=
+        std::string::npos);
+  CHECK(code.find("new BiquadFilter.Section(0.5, 0.25, 0.125, -0.75, 0.25)") !=
+        std::string::npos);
 }
 
-TEST(CodeGenTest, CppMultiSectionHasOnePerLineWithTrailingComma) {
+TEST_CASE("CodeGenTest CppMultiSectionHasOnePerLineWithTrailingComma",
+          "[filterdesigner]") {
   // Chosen so %.17g formats them identically on every platform.
   Sections sos{{1.0, 0.0, 0.0, -0.5, 0.25}, {1.0, 2.0, 1.0, -0.125, 0.75}};
   std::string code = EmitCode(sos, Language::Cpp);
-  EXPECT_NE(code.find("{1, 0, 0, -0.5, 0.25}"), std::string::npos);
-  EXPECT_NE(code.find("{1, 2, 1, -0.125, 0.75}"), std::string::npos);
-  EXPECT_NE(code.find("};"), std::string::npos);
+  CHECK(code.find("{1, 0, 0, -0.5, 0.25}") != std::string::npos);
+  CHECK(code.find("{1, 2, 1, -0.125, 0.75}") != std::string::npos);
+  CHECK(code.find("};") != std::string::npos);
 }
 
-TEST(CodeGenTest, JavaMultiSectionInsertsCommaBetweenSectionsNotAfterLast) {
+TEST_CASE("CodeGenTest JavaMultiSectionInsertsCommaBetweenSectionsNotAfterLast",
+          "[filterdesigner]") {
   Sections sos{{1.0, 0.0, 0.0, -0.5, 0.25}, {1.0, 2.0, 1.0, -0.125, 0.75}};
   std::string code = EmitCode(sos, Language::Java);
   // Trailing comma after last section would be a syntax error in Java.
   auto lastSection = code.rfind("new BiquadFilter.Section(");
-  ASSERT_NE(lastSection, std::string::npos);
+  REQUIRE(lastSection != std::string::npos);
   auto closeParen = code.find(')', lastSection);
-  ASSERT_NE(closeParen, std::string::npos);
-  EXPECT_EQ(code[closeParen + 1], '\n');
+  REQUIRE(closeParen != std::string::npos);
+  CHECK(code[closeParen + 1] == '\n');
 }
 
-TEST(CodeGenTest, UsesHighPrecisionForScipyGoldenValues) {
+TEST_CASE("CodeGenTest UsesHighPrecisionForScipyGoldenValues",
+          "[filterdesigner]") {
   auto filter = SectionsOf(BiquadFilter::Notch(1000_Hz, 60_Hz, 10.0));
   std::string code = EmitCode(filter, Language::Cpp);
   // Enough precision to reproduce the scipy-matching coefficient.
-  EXPECT_NE(code.find("0.9814970254751"), std::string::npos);
+  CHECK(code.find("0.9814970254751") != std::string::npos);
 }
 
-TEST(CodeGenTest, PythonEmitsWpimathFilterBiquadFilter) {
+TEST_CASE("CodeGenTest PythonEmitsWpimathFilterBiquadFilter",
+          "[filterdesigner]") {
   Sections sos{{0.5, 0.25, 0.125, -0.75, 0.25}};
   std::string code = EmitCode(sos, Language::Python, "lowpass");
-  EXPECT_NE(code.find("from wpimath.filter import BiquadFilter"),
-            std::string::npos);
-  EXPECT_NE(code.find("lowpass = BiquadFilter(["), std::string::npos);
-  EXPECT_NE(
-      code.find("BiquadFilter.Section(b0=0.5, b1=0.25, b2=0.125, a1=-0.75, "
-                "a2=0.25)"),
-      std::string::npos);
-  EXPECT_NE(code.find("])"), std::string::npos);
+  CHECK(code.find("from wpimath.filter import BiquadFilter") !=
+        std::string::npos);
+  CHECK(code.find("lowpass = BiquadFilter([") != std::string::npos);
+  CHECK(code.find("BiquadFilter.Section(b0=0.5, b1=0.25, b2=0.125, a1=-0.75, "
+                  "a2=0.25)") != std::string::npos);
+  CHECK(code.find("])") != std::string::npos);
 }
 
-TEST(CodeGenTest, DefaultVariableNameIsFilter) {
+TEST_CASE("CodeGenTest DefaultVariableNameIsFilter", "[filterdesigner]") {
   Sections sos{{1.0, 0.0, 0.0, 0.0, 0.0}};
-  EXPECT_NE(EmitCode(sos, Language::Cpp).find("BiquadFilter filter"),
-            std::string::npos);
-  EXPECT_NE(EmitCode(sos, Language::Java).find("BiquadFilter filter "),
-            std::string::npos);
+  CHECK(EmitCode(sos, Language::Cpp).find("BiquadFilter filter") !=
+        std::string::npos);
+  CHECK(EmitCode(sos, Language::Java).find("BiquadFilter filter ") !=
+        std::string::npos);
 }
 
-TEST(CodeGenTest, CppGoldenSnippet) {
+TEST_CASE("CodeGenTest CppGoldenSnippet", "[filterdesigner]") {
   Sections sos{{1.0, 0.0, 0.0, -0.5, 0.25}, {1.0, 2.0, 1.0, -0.125, 0.75}};
   constexpr std::string_view kGolden =
       "wpi::math::BiquadFilter lowpass{\n"
       "    {1, 0, 0, -0.5, 0.25},\n"
       "    {1, 2, 1, -0.125, 0.75},\n"
       "};\n";
-  EXPECT_EQ(EmitCode(sos, Language::Cpp, "lowpass"), kGolden);
+  CHECK(EmitCode(sos, Language::Cpp, "lowpass") == kGolden);
 }
 
-TEST(CodeGenTest, JavaGoldenSnippet) {
+TEST_CASE("CodeGenTest JavaGoldenSnippet", "[filterdesigner]") {
   Sections sos{{1.0, 0.0, 0.0, -0.5, 0.25}, {1.0, 2.0, 1.0, -0.125, 0.75}};
   constexpr std::string_view kGolden =
       "BiquadFilter lowpass = new BiquadFilter(\n"
       "    new BiquadFilter.Section(1, 0, 0, -0.5, 0.25),\n"
       "    new BiquadFilter.Section(1, 2, 1, -0.125, 0.75)\n"
       ");\n";
-  EXPECT_EQ(EmitCode(sos, Language::Java, "lowpass"), kGolden);
+  CHECK(EmitCode(sos, Language::Java, "lowpass") == kGolden);
 }
 
-TEST(CodeGenTest, PythonGoldenSnippet) {
+TEST_CASE("CodeGenTest PythonGoldenSnippet", "[filterdesigner]") {
   Sections sos{{1.0, 0.0, 0.0, -0.5, 0.25}, {1.0, 2.0, 1.0, -0.125, 0.75}};
   constexpr std::string_view kGolden =
       "from wpimath.filter import BiquadFilter\n"
@@ -127,7 +129,7 @@ TEST(CodeGenTest, PythonGoldenSnippet) {
       "    BiquadFilter.Section(b0=1, b1=0, b2=0, a1=-0.5, a2=0.25),\n"
       "    BiquadFilter.Section(b0=1, b1=2, b2=1, a1=-0.125, a2=0.75),\n"
       "])\n";
-  EXPECT_EQ(EmitCode(sos, Language::Python, "lowpass"), kGolden);
+  CHECK(EmitCode(sos, Language::Python, "lowpass") == kGolden);
 }
 
 }  // namespace

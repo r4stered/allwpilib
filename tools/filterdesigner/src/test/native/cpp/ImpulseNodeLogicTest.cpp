@@ -4,8 +4,9 @@
 
 #include "wpi/filterdesigner/nodes/ImpulseNodeLogic.hpp"
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
 
 namespace {
@@ -13,73 +14,80 @@ namespace {
 using wpi::filterdesigner::ImpulseNodeLogic;
 using wpi::filterdesigner::Signal;
 
-TEST(ImpulseNodeLogicTest, DefaultsProduceUnitImpulse) {
+TEST_CASE("ImpulseNodeLogicTest DefaultsProduceUnitImpulse",
+          "[filterdesigner]") {
   ImpulseNodeLogic logic;
   const Signal* sig = logic.Signal();
-  ASSERT_NE(sig, nullptr);
-  ASSERT_FALSE(sig->values.empty());
-  EXPECT_DOUBLE_EQ(sig->values.front(), 1.0);
+  REQUIRE(sig != nullptr);
+  REQUIRE_FALSE(sig->values.empty());
+  CHECK_DOUBLE_EQ(sig->values.front(), 1.0);
   for (std::size_t i = 1; i < sig->values.size(); ++i) {
-    EXPECT_DOUBLE_EQ(sig->values[i], 0.0) << "tail must be zero at i=" << i;
+    UNSCOPED_INFO("tail must be zero at i=" << i);
+    CHECK_DOUBLE_EQ(sig->values[i], 0.0);
   }
-  EXPECT_DOUBLE_EQ(sig->sampleRate, 1000.0);
-  EXPECT_EQ(sig->values.size(), 200u);
-  EXPECT_TRUE(sig->uniform);
+  CHECK_DOUBLE_EQ(sig->sampleRate, 1000.0);
+  CHECK(sig->values.size() == 200u);
+  CHECK(sig->uniform);
 }
 
-TEST(ImpulseNodeLogicTest, TimestampsAreUniformlySpaced) {
+TEST_CASE("ImpulseNodeLogicTest TimestampsAreUniformlySpaced",
+          "[filterdesigner]") {
   ImpulseNodeLogic logic;
   logic.sampleRate = 500.0;
   logic.length = 8;
   const Signal* sig = logic.Signal();
-  ASSERT_NE(sig, nullptr);
-  ASSERT_EQ(sig->timestamps.size(), 8u);
+  REQUIRE(sig != nullptr);
+  REQUIRE(sig->timestamps.size() == 8u);
   for (std::size_t i = 0; i < sig->timestamps.size(); ++i) {
-    EXPECT_DOUBLE_EQ(sig->timestamps[i], static_cast<double>(i) / 500.0);
+    CHECK_DOUBLE_EQ(sig->timestamps[i], static_cast<double>(i) / 500.0);
   }
 }
 
-TEST(ImpulseNodeLogicTest, RepeatedCallsReturnSamePointerWhenParamsUnchanged) {
+TEST_CASE(
+    "ImpulseNodeLogicTest RepeatedCallsReturnSamePointerWhenParamsUnchanged",
+    "[filterdesigner]") {
   ImpulseNodeLogic logic;
   const Signal* a = logic.Signal();
   const Signal* b = logic.Signal();
-  EXPECT_EQ(a, b);
+  CHECK(a == b);
 }
 
-TEST(ImpulseNodeLogicTest, ChangingLengthBumpsRevisionAndRebuilds) {
+TEST_CASE("ImpulseNodeLogicTest ChangingLengthBumpsRevisionAndRebuilds",
+          "[filterdesigner]") {
   ImpulseNodeLogic logic;
   const Signal* a = logic.Signal();
-  ASSERT_NE(a, nullptr);
+  REQUIRE(a != nullptr);
   std::uint64_t rev0 = a->revision;
   logic.length = 50;
   const Signal* b = logic.Signal();
-  ASSERT_NE(b, nullptr);
-  EXPECT_EQ(b->values.size(), 50u);
-  EXPECT_GT(b->revision, rev0);
+  REQUIRE(b != nullptr);
+  CHECK(b->values.size() == 50u);
+  CHECK(b->revision > rev0);
 }
 
-TEST(ImpulseNodeLogicTest, ChangingSampleRateRebuildsSignal) {
+TEST_CASE("ImpulseNodeLogicTest ChangingSampleRateRebuildsSignal",
+          "[filterdesigner]") {
   ImpulseNodeLogic logic;
   logic.sampleRate = 1000.0;
   logic.length = 4;
   const Signal* a = logic.Signal();
-  ASSERT_NE(a, nullptr);
+  REQUIRE(a != nullptr);
   std::uint64_t rev0 = a->revision;
   logic.sampleRate = 4000.0;
   const Signal* b = logic.Signal();
-  ASSERT_NE(b, nullptr);
-  EXPECT_GT(b->revision, rev0);
-  EXPECT_DOUBLE_EQ(b->sampleRate, 4000.0);
-  EXPECT_DOUBLE_EQ(b->timestamps[1], 1.0 / 4000.0);
+  REQUIRE(b != nullptr);
+  CHECK(b->revision > rev0);
+  CHECK_DOUBLE_EQ(b->sampleRate, 4000.0);
+  CHECK_DOUBLE_EQ(b->timestamps[1], 1.0 / 4000.0);
 }
 
-TEST(ImpulseNodeLogicTest, InvalidParamsReturnNull) {
+TEST_CASE("ImpulseNodeLogicTest InvalidParamsReturnNull", "[filterdesigner]") {
   ImpulseNodeLogic logic;
   logic.sampleRate = 0.0;
-  EXPECT_EQ(logic.Signal(), nullptr);
+  CHECK(logic.Signal() == nullptr);
   logic.sampleRate = 1000.0;
   logic.length = 1;  // below kMinLength
-  EXPECT_EQ(logic.Signal(), nullptr);
+  CHECK(logic.Signal() == nullptr);
 }
 
 }  // namespace

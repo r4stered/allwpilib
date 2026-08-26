@@ -5,13 +5,12 @@
 #include "wpi/filterdesigner/codegen/Export.hpp"
 
 #include <cctype>
+#include <format>
 #include <fstream>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
-
-#include <fmt/format.h>
 
 #include "CodeGenLines.hpp"
 
@@ -49,11 +48,11 @@ Lines EmitCppFile(const Sections& sections, std::string_view className,
   out.emplace_back("namespace frc::filters {");
   out.emplace_back("");
   out.push_back(
-      fmt::format("inline wpi::math::BiquadFilter {}() {{", className));
+      std::format("inline wpi::math::BiquadFilter {}() {{", className));
   out.emplace_back("  return wpi::math::BiquadFilter{");
   for (const Section& s : sections) {
     out.push_back(
-        fmt::format("      {{{:.17g}, {:.17g}, {:.17g}, {:.17g}, {:.17g}}},",
+        std::format("      {{{:.17g}, {:.17g}, {:.17g}, {:.17g}, {:.17g}}},",
                     s.b0, s.b1, s.b2, s.a1, s.a2));
   }
   out.emplace_back("  };");
@@ -73,13 +72,13 @@ Lines EmitJavaFile(const Sections& sections, std::string_view className,
   out.emplace_back("");
   out.emplace_back("import org.wpilib.math.filter.BiquadFilter;");
   out.emplace_back("");
-  out.push_back(fmt::format("public final class {} {{", className));
+  out.push_back(std::format("public final class {} {{", className));
   out.emplace_back("  public static BiquadFilter create() {");
   out.emplace_back("    return new BiquadFilter(");
   for (size_t i = 0; i < sections.size(); ++i) {
     const Section& s = sections[i];
     std::string_view sep = (i + 1 < sections.size()) ? "," : "";
-    out.push_back(fmt::format(
+    out.push_back(std::format(
         "        new BiquadFilter.Section({:.17g}, {:.17g}, {:.17g}, {:.17g}, "
         "{:.17g}){}",
         s.b0, s.b1, s.b2, s.a1, s.a2, sep));
@@ -87,7 +86,7 @@ Lines EmitJavaFile(const Sections& sections, std::string_view className,
   out.emplace_back("    );");
   out.emplace_back("  }");
   out.emplace_back("");
-  out.push_back(fmt::format("  private {}() {{}}", className));
+  out.push_back(std::format("  private {}() {{}}", className));
   out.emplace_back("}");
   return out;
 }
@@ -102,10 +101,10 @@ Lines EmitPythonFile(const Sections& sections, std::string_view className,
   out.emplace_back("from wpimath.filter import BiquadFilter");
   out.emplace_back("");
   out.emplace_back("");
-  out.push_back(fmt::format("def {}() -> BiquadFilter:", snake));
+  out.push_back(std::format("def {}() -> BiquadFilter:", snake));
   out.emplace_back("    return BiquadFilter([");
   for (const Section& s : sections) {
-    out.push_back(fmt::format(
+    out.push_back(std::format(
         "        BiquadFilter.Section(b0={:.17g}, b1={:.17g}, b2={:.17g}, "
         "a1={:.17g}, a2={:.17g}),",
         s.b0, s.b1, s.b2, s.a1, s.a2));

@@ -6,7 +6,7 @@
 #include <string>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/codegen/CodeGen.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
@@ -28,7 +28,7 @@ using wpi::filterdesigner::Language;
 using wpi::filterdesigner::NodeRegistry;
 using wpi::filterdesigner::SerializeGraph;
 
-TEST(CodeGenNodeSerializeTest, ParamsRoundTrip) {
+TEST_CASE("CodeGenNodeSerializeTest ParamsRoundTrip", "[filterdesigner]") {
   NodeRegistry reg;
   CodeGenNode::Register(reg);
 
@@ -42,14 +42,16 @@ TEST(CodeGenNodeSerializeTest, ParamsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<CodeGenNode*>(restored.FindNodeById(id));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().lang, Language::Python);
-  EXPECT_EQ(loaded->Logic().varName, "shooterFilter");
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().lang == Language::Python);
+  CHECK(loaded->Logic().varName == "shooterFilter");
 }
 
-TEST(CodeGenNodeSerializeTest, EmptyVarNameDefaultsOnLoad) {
+TEST_CASE("CodeGenNodeSerializeTest EmptyVarNameDefaultsOnLoad",
+          "[filterdesigner]") {
   NodeRegistry reg;
   CodeGenNode::Register(reg);
 
@@ -64,13 +66,15 @@ TEST(CodeGenNodeSerializeTest, EmptyVarNameDefaultsOnLoad) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<CodeGenNode*>(restored.FindNodeById(1));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().varName, "filter");
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().varName == "filter");
 }
 
-TEST(CodeGenNodeSerializeTest, BiquadStageToCodeGenLinkRoundTrips) {
+TEST_CASE("CodeGenNodeSerializeTest BiquadStageToCodeGenLinkRoundTrips",
+          "[filterdesigner]") {
   NodeRegistry reg;
   BiquadStageNode::Register(reg);
   CodeGenNode::Register(reg);
@@ -86,16 +90,18 @@ TEST(CodeGenNodeSerializeTest, BiquadStageToCodeGenLinkRoundTrips) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto links = restored.Links();
-  ASSERT_EQ(links.size(), 1u);
-  EXPECT_EQ(links[0].srcId, stageId);
-  EXPECT_EQ(links[0].dstId, codegenId);
-  EXPECT_EQ(links[0].srcPin, "filter");
-  EXPECT_EQ(links[0].dstPin, "in");
+  REQUIRE(links.size() == 1u);
+  CHECK(links[0].srcId == stageId);
+  CHECK(links[0].dstId == codegenId);
+  CHECK(links[0].srcPin == "filter");
+  CHECK(links[0].dstPin == "in");
 }
 
-TEST(CodeGenNodeSerializeTest, BiquadStageToMultipleSinksRoundTrips) {
+TEST_CASE("CodeGenNodeSerializeTest BiquadStageToMultipleSinksRoundTrips",
+          "[filterdesigner]") {
   // Multi-language export off one Filter wire — the canonical "why
   // CodeGen-as-sink" example from the plan.
   NodeRegistry reg;
@@ -119,9 +125,10 @@ TEST(CodeGenNodeSerializeTest, BiquadStageToMultipleSinksRoundTrips) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
-  EXPECT_EQ(restored.Links().size(), 3u);
-  EXPECT_EQ(restored.Nodes().size(), 4u);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  CHECK(restored.Links().size() == 3u);
+  CHECK(restored.Nodes().size() == 4u);
 }
 
 }  // namespace

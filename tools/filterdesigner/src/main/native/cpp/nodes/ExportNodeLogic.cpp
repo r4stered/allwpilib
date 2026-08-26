@@ -5,10 +5,9 @@
 #include "wpi/filterdesigner/nodes/ExportNodeLogic.hpp"
 
 #include <filesystem>
+#include <format>
 #include <string>
 #include <utility>
-
-#include <fmt/format.h>
 
 #include "wpi/filterdesigner/codegen/Export.hpp"
 #include "wpi/filterdesigner/model/DesignedFilter.hpp"
@@ -18,7 +17,7 @@ namespace wpi::filterdesigner {
 namespace {
 
 std::string BuildDescription(const DesignedFilter& filter) {
-  return fmt::format("Sample rate: {:g} Hz\nSections: {}\n", filter.sampleRate,
+  return std::format("Sample rate: {:g} Hz\nSections: {}\n", filter.sampleRate,
                      filter.sections.size());
 }
 

@@ -10,8 +10,9 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/model/DesignedFilter.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
 #include "wpi/filterdesigner/model/Stage.hpp"
@@ -43,73 +44,82 @@ Signal SineSignal(double f, double fs, std::size_t n,
   return s;
 }
 
-TEST(BiquadStageNodeLogicTest, FreshLogicDesignsDefaultLowPass) {
+TEST_CASE("BiquadStageNodeLogicTest FreshLogicDesignsDefaultLowPass",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   // Defaults: LP / Butterworth / order 4 / f1 = 100 Hz / sampleRate 1000 Hz.
   const DesignedFilter* design = logic.Filter();
-  ASSERT_NE(design, nullptr) << logic.DesignError();
-  EXPECT_FALSE(design->sections.empty());
-  EXPECT_DOUBLE_EQ(design->sampleRate, 1000.0);
-  EXPECT_TRUE(logic.DesignError().empty());
-  EXPECT_GT(logic.FilterVersion(), 0u);
+  UNSCOPED_INFO(logic.DesignError());
+  REQUIRE(design != nullptr);
+  CHECK_FALSE(design->sections.empty());
+  CHECK_DOUBLE_EQ(design->sampleRate, 1000.0);
+  CHECK(logic.DesignError().empty());
+  CHECK(logic.FilterVersion() > 0u);
 }
 
-TEST(BiquadStageNodeLogicTest, InvalidCutoffReturnsNullWithError) {
+TEST_CASE("BiquadStageNodeLogicTest InvalidCutoffReturnsNullWithError",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   // Cutoff above Nyquist — wpi::math::BiquadFilter throws invalid_argument,
   // which the logic catches and surfaces as an error.
   logic.stage.f1 = 600.0;  // sampleRate is 1000, Nyquist is 500
   const DesignedFilter* design = logic.Filter();
-  EXPECT_EQ(design, nullptr);
-  EXPECT_FALSE(logic.DesignError().empty());
+  CHECK(design == nullptr);
+  CHECK_FALSE(logic.DesignError().empty());
 }
 
-TEST(BiquadStageNodeLogicTest, NonPositiveSampleRateRejectedBeforeFactoryCall) {
+TEST_CASE(
+    "BiquadStageNodeLogicTest NonPositiveSampleRateRejectedBeforeFactoryCall",
+    "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   logic.sampleRate = 0.0;
-  EXPECT_EQ(logic.Filter(), nullptr);
-  EXPECT_FALSE(logic.DesignError().empty());
+  CHECK(logic.Filter() == nullptr);
+  CHECK_FALSE(logic.DesignError().empty());
 }
 
-TEST(BiquadStageNodeLogicTest, ChangingStageBumpsFilterVersionAndCascade) {
+TEST_CASE("BiquadStageNodeLogicTest ChangingStageBumpsFilterVersionAndCascade",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   const DesignedFilter* first = logic.Filter();
-  ASSERT_NE(first, nullptr);
+  REQUIRE(first != nullptr);
   const std::size_t firstSize = first->sections.size();
   const double firstB0 = first->sections.front().b0;
   auto firstVersion = logic.FilterVersion();
 
   // Same params → same cache pointer (no version bump).
   const DesignedFilter* again = logic.Filter();
-  EXPECT_EQ(again, first);
-  EXPECT_EQ(logic.FilterVersion(), firstVersion);
+  CHECK(again == first);
+  CHECK(logic.FilterVersion() == firstVersion);
 
   // Different params → re-design + version bump. Order 6 should produce
   // more sections than order 4 (3 vs 2), so the size delta is a robust
   // proxy for "cascade changed" without needing operator== on Section.
   logic.stage.order = 6;
   const DesignedFilter* second = logic.Filter();
-  ASSERT_NE(second, nullptr);
-  EXPECT_GT(logic.FilterVersion(), firstVersion);
-  EXPECT_NE(second->sections.size(), firstSize);
-  EXPECT_NE(second->sections.front().b0, firstB0);
+  REQUIRE(second != nullptr);
+  CHECK(logic.FilterVersion() > firstVersion);
+  CHECK(second->sections.size() != firstSize);
+  CHECK(second->sections.front().b0 != firstB0);
 }
 
-TEST(BiquadStageNodeLogicTest, FilteredOnNullInputReturnsNull) {
+TEST_CASE("BiquadStageNodeLogicTest FilteredOnNullInputReturnsNull",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
-  EXPECT_EQ(logic.Filtered(nullptr), nullptr);
+  CHECK(logic.Filtered(nullptr) == nullptr);
 }
 
-TEST(BiquadStageNodeLogicTest, FilteredAppliesCascadeAndPreservesLength) {
+TEST_CASE("BiquadStageNodeLogicTest FilteredAppliesCascadeAndPreservesLength",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   // 200 samples of 10 Hz tone at 1000 Hz fs — well below the default 100 Hz
   // cutoff, so the LP should pass it almost untouched.
   Signal in = SineSignal(10.0, 1000.0, 200, "x");
   const Signal* out = logic.Filtered(&in);
-  ASSERT_NE(out, nullptr);
-  EXPECT_EQ(out->values.size(), in.values.size());
-  EXPECT_EQ(out->timestamps.size(), in.timestamps.size());
-  EXPECT_NE(out->name, in.name) << "stage suffix should append";
+  REQUIRE(out != nullptr);
+  CHECK(out->values.size() == in.values.size());
+  CHECK(out->timestamps.size() == in.timestamps.size());
+  UNSCOPED_INFO("stage suffix should append");
+  CHECK(out->name != in.name);
 
   // Tail samples (after transient) should be ~equal to the input within 1 dB.
   double maxIn = 0.0;
@@ -118,30 +128,33 @@ TEST(BiquadStageNodeLogicTest, FilteredAppliesCascadeAndPreservesLength) {
     maxIn = std::max(maxIn, std::abs(in.values[i]));
     maxOut = std::max(maxOut, std::abs(out->values[i]));
   }
-  EXPECT_GT(maxIn, 0.5);
-  EXPECT_NEAR(maxOut, maxIn, 0.2)
-      << "low-frequency tone should pass through an LP almost unchanged";
+  CHECK(maxIn > 0.5);
+  UNSCOPED_INFO(
+      "low-frequency tone should pass through an LP almost unchanged");
+  CHECK_NEAR(maxOut, maxIn, 0.2);
 }
 
-TEST(BiquadStageNodeLogicTest, FilteredRepeatPullReturnsConsistentResult) {
+TEST_CASE("BiquadStageNodeLogicTest FilteredRepeatPullReturnsConsistentResult",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   Signal in = SineSignal(10.0, 1000.0, 64, "x");
   const Signal* first = logic.Filtered(&in);
-  ASSERT_NE(first, nullptr);
+  REQUIRE(first != nullptr);
   std::vector<double> firstValues = first->values;
   // Cache hit path: same pointer, same revision. Output values must match
   // (this also exercises the cache-hit fast path — the optional<Signal>
   // address is stable either way so we can't assert that directly).
   const Signal* second = logic.Filtered(&in);
-  ASSERT_NE(second, nullptr);
-  EXPECT_EQ(second->values, firstValues);
+  REQUIRE(second != nullptr);
+  CHECK(second->values == firstValues);
 }
 
-TEST(BiquadStageNodeLogicTest, FilteredCacheInvalidatesOnRevisionBump) {
+TEST_CASE("BiquadStageNodeLogicTest FilteredCacheInvalidatesOnRevisionBump",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   Signal in = SineSignal(10.0, 1000.0, 64, "x");
   const Signal* first = logic.Filtered(&in);
-  ASSERT_NE(first, nullptr);
+  REQUIRE(first != nullptr);
   std::vector<double> firstValues = first->values;
 
   // Simulate the NT4 ring-buffer pattern: same pointer, new revision, new
@@ -149,42 +162,48 @@ TEST(BiquadStageNodeLogicTest, FilteredCacheInvalidatesOnRevisionBump) {
   in.values[10] = 99.0;
   in.revision = 2;
   const Signal* second = logic.Filtered(&in);
-  ASSERT_NE(second, nullptr);
-  EXPECT_NE(second->values, firstValues)
-      << "filtered output must reflect the mutated input";
+  REQUIRE(second != nullptr);
+  UNSCOPED_INFO("filtered output must reflect the mutated input");
+  CHECK(second->values != firstValues);
 }
 
-TEST(BiquadStageNodeLogicTest, FilteredCacheInvalidatesOnDesignChange) {
+TEST_CASE("BiquadStageNodeLogicTest FilteredCacheInvalidatesOnDesignChange",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   Signal in = SineSignal(10.0, 1000.0, 64, "x");
   const Signal* first = logic.Filtered(&in);
-  ASSERT_NE(first, nullptr);
+  REQUIRE(first != nullptr);
   std::vector<double> firstValues = first->values;
 
   // Switch family — redesign must invalidate the filtered cache.
   logic.stage.family = Family::Chebyshev1;
   const Signal* second = logic.Filtered(&in);
-  ASSERT_NE(second, nullptr);
-  EXPECT_NE(second->values, firstValues);
+  REQUIRE(second != nullptr);
+  CHECK(second->values != firstValues);
 }
 
-TEST(BiquadStageNodeLogicTest, NotchKindDesignsWithoutFamily) {
+TEST_CASE("BiquadStageNodeLogicTest NotchKindDesignsWithoutFamily",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   logic.stage.kind = StageKind::Notch;
   logic.stage.f1 = 60.0;
   logic.stage.q = 30.0;
   const DesignedFilter* design = logic.Filter();
-  ASSERT_NE(design, nullptr) << logic.DesignError();
-  EXPECT_EQ(design->sections.size(), 1u) << "notch is a single biquad";
+  UNSCOPED_INFO(logic.DesignError());
+  REQUIRE(design != nullptr);
+  UNSCOPED_INFO("notch is a single biquad");
+  CHECK(design->sections.size() == 1u);
 }
 
-TEST(BiquadStageNodeLogicTest, MovingAverageDesignsFromTapsAlone) {
+TEST_CASE("BiquadStageNodeLogicTest MovingAverageDesignsFromTapsAlone",
+          "[filterdesigner]") {
   BiquadStageNodeLogic logic;
   logic.stage.kind = StageKind::MovingAverage;
   logic.stage.taps = 8;
   const DesignedFilter* design = logic.Filter();
-  ASSERT_NE(design, nullptr) << logic.DesignError();
-  EXPECT_FALSE(design->sections.empty());
+  UNSCOPED_INFO(logic.DesignError());
+  REQUIRE(design != nullptr);
+  CHECK_FALSE(design->sections.empty());
 }
 
 }  // namespace

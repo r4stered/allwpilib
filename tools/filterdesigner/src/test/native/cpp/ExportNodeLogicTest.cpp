@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <string>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/codegen/CodeGen.hpp"
 #include "wpi/filterdesigner/model/DesignedFilter.hpp"
@@ -27,44 +27,47 @@ DesignedFilter MakeFilter() {
   return f;
 }
 
-TEST(ExportNodeLogicTest, NullFilterFailsWithMessage) {
+TEST_CASE("ExportNodeLogicTest NullFilterFailsWithMessage",
+          "[filterdesigner]") {
   ExportNodeLogic logic;
   logic.projectRoot =
       (std::filesystem::temp_directory_path() / "fd_export_node_null").string();
-  EXPECT_FALSE(logic.Export(nullptr));
-  EXPECT_FALSE(logic.lastOk);
-  EXPECT_NE(logic.lastMessage.find("No filter"), std::string::npos);
+  CHECK_FALSE(logic.Export(nullptr));
+  CHECK_FALSE(logic.lastOk);
+  CHECK(logic.lastMessage.find("No filter") != std::string::npos);
 }
 
-TEST(ExportNodeLogicTest, EmptySectionsFailsWithMessage) {
+TEST_CASE("ExportNodeLogicTest EmptySectionsFailsWithMessage",
+          "[filterdesigner]") {
   ExportNodeLogic logic;
   DesignedFilter f;
   f.sampleRate = 1000.0;
-  EXPECT_FALSE(logic.Export(&f));
-  EXPECT_NE(logic.lastMessage.find("No filter"), std::string::npos);
+  CHECK_FALSE(logic.Export(&f));
+  CHECK(logic.lastMessage.find("No filter") != std::string::npos);
 }
 
-TEST(ExportNodeLogicTest, InvalidClassNameFails) {
+TEST_CASE("ExportNodeLogicTest InvalidClassNameFails", "[filterdesigner]") {
   ExportNodeLogic logic;
   logic.className = "9bad";
   logic.projectRoot =
       (std::filesystem::temp_directory_path() / "fd_export_node_invalid")
           .string();
   DesignedFilter f = MakeFilter();
-  EXPECT_FALSE(logic.Export(&f));
-  EXPECT_FALSE(logic.lastOk);
-  EXPECT_NE(logic.lastMessage.find("Invalid class name"), std::string::npos);
+  CHECK_FALSE(logic.Export(&f));
+  CHECK_FALSE(logic.lastOk);
+  CHECK(logic.lastMessage.find("Invalid class name") != std::string::npos);
 }
 
-TEST(ExportNodeLogicTest, EmptyRootFails) {
+TEST_CASE("ExportNodeLogicTest EmptyRootFails", "[filterdesigner]") {
   ExportNodeLogic logic;
   // projectRoot left empty.
   DesignedFilter f = MakeFilter();
-  EXPECT_FALSE(logic.Export(&f));
-  EXPECT_NE(logic.lastMessage.find("Project root is empty"), std::string::npos);
+  CHECK_FALSE(logic.Export(&f));
+  CHECK(logic.lastMessage.find("Project root is empty") != std::string::npos);
 }
 
-TEST(ExportNodeLogicTest, SuccessfulExportWritesFile) {
+TEST_CASE("ExportNodeLogicTest SuccessfulExportWritesFile",
+          "[filterdesigner]") {
   auto root = std::filesystem::temp_directory_path() / "fd_export_node_ok";
   std::filesystem::remove_all(root);
 
@@ -74,17 +77,18 @@ TEST(ExportNodeLogicTest, SuccessfulExportWritesFile) {
   logic.projectRoot = root.string();
 
   DesignedFilter f = MakeFilter();
-  ASSERT_TRUE(logic.Export(&f));
-  EXPECT_TRUE(logic.lastOk);
+  REQUIRE(logic.Export(&f));
+  CHECK(logic.lastOk);
 
   auto expected =
       root / "src" / "main" / "include" / "filters" / "ShooterFilter.h";
-  EXPECT_TRUE(std::filesystem::exists(expected));
+  CHECK(std::filesystem::exists(expected));
 
   std::filesystem::remove_all(root);
 }
 
-TEST(ExportNodeLogicTest, MessageMentionsSuccessPath) {
+TEST_CASE("ExportNodeLogicTest MessageMentionsSuccessPath",
+          "[filterdesigner]") {
   auto root = std::filesystem::temp_directory_path() / "fd_export_node_msg";
   std::filesystem::remove_all(root);
 
@@ -93,9 +97,9 @@ TEST(ExportNodeLogicTest, MessageMentionsSuccessPath) {
   logic.projectRoot = root.string();
 
   DesignedFilter f = MakeFilter();
-  ASSERT_TRUE(logic.Export(&f));
-  EXPECT_NE(logic.lastMessage.find("Wrote"), std::string::npos);
-  EXPECT_NE(logic.lastMessage.find("MsgFilter"), std::string::npos);
+  REQUIRE(logic.Export(&f));
+  CHECK(logic.lastMessage.find("Wrote") != std::string::npos);
+  CHECK(logic.lastMessage.find("MsgFilter") != std::string::npos);
 
   std::filesystem::remove_all(root);
 }

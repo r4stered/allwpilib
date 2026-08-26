@@ -6,8 +6,9 @@
 #include <string>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/graph/Serialize.hpp"
@@ -31,7 +32,8 @@ void RegisterAll(NodeRegistry& reg) {
   TimePlotNode::Register(reg);
 }
 
-TEST(NT4SourceNodeSerializeTest, ServerSettingsRoundTrip) {
+TEST_CASE("NT4SourceNodeSerializeTest ServerSettingsRoundTrip",
+          "[filterdesigner]") {
   NodeRegistry reg;
   RegisterAll(reg);
   Graph graph;
@@ -46,16 +48,18 @@ TEST(NT4SourceNodeSerializeTest, ServerSettingsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<NT4SourceNode*>(restored.FindNodeById(id));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().serverMode, NT4SourceNodeLogic::ServerMode::Team);
-  EXPECT_EQ(loaded->Logic().host, "10.12.34.2");
-  EXPECT_EQ(loaded->Logic().team, 1234);
-  EXPECT_EQ(loaded->Logic().port, 5810);
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().serverMode == NT4SourceNodeLogic::ServerMode::Team);
+  CHECK(loaded->Logic().host == "10.12.34.2");
+  CHECK(loaded->Logic().team == 1234);
+  CHECK(loaded->Logic().port == 5810);
 }
 
-TEST(NT4SourceNodeSerializeTest, TopicAndBufferSettingsRoundTrip) {
+TEST_CASE("NT4SourceNodeSerializeTest TopicAndBufferSettingsRoundTrip",
+          "[filterdesigner]") {
   NodeRegistry reg;
   RegisterAll(reg);
   Graph graph;
@@ -69,18 +73,20 @@ TEST(NT4SourceNodeSerializeTest, TopicAndBufferSettingsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<NT4SourceNode*>(restored.FindNodeById(id));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().TopicName(), "/SmartDashboard/shooter/rpm");
-  EXPECT_DOUBLE_EQ(loaded->Logic().BufferSeconds(), 12.5);
-  EXPECT_TRUE(loaded->Logic().Frozen());
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().TopicName() == "/SmartDashboard/shooter/rpm");
+  CHECK_DOUBLE_EQ(loaded->Logic().BufferSeconds(), 12.5);
+  CHECK(loaded->Logic().Frozen());
   // Signal name follows the topic.
-  EXPECT_EQ(loaded->Logic().Source().GetSignal()->name,
-            "/SmartDashboard/shooter/rpm");
+  CHECK(loaded->Logic().Source().GetSignal()->name ==
+        "/SmartDashboard/shooter/rpm");
 }
 
-TEST(NT4SourceNodeSerializeTest, NT4SourceToTimePlotLinkRoundTrips) {
+TEST_CASE("NT4SourceNodeSerializeTest NT4SourceToTimePlotLinkRoundTrips",
+          "[filterdesigner]") {
   NodeRegistry reg;
   RegisterAll(reg);
   Graph graph;
@@ -95,16 +101,18 @@ TEST(NT4SourceNodeSerializeTest, NT4SourceToTimePlotLinkRoundTrips) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto links = restored.Links();
-  ASSERT_EQ(links.size(), 1u);
-  EXPECT_EQ(links[0].srcId, srcId);
-  EXPECT_EQ(links[0].dstId, plotId);
-  EXPECT_EQ(links[0].srcPin, "out");
-  EXPECT_EQ(links[0].dstPin, "in0");
+  REQUIRE(links.size() == 1u);
+  CHECK(links[0].srcId == srcId);
+  CHECK(links[0].dstId == plotId);
+  CHECK(links[0].srcPin == "out");
+  CHECK(links[0].dstPin == "in0");
 }
 
-TEST(NT4SourceNodeSerializeTest, SanitizesNegativeTeamAndPortOnLoad) {
+TEST_CASE("NT4SourceNodeSerializeTest SanitizesNegativeTeamAndPortOnLoad",
+          "[filterdesigner]") {
   // Hand-rolled JSON with out-of-range values — guards against a stale .fdsgn
   // (or hand-edited file) wiring the live UI up with nonsense.
   NodeRegistry reg;
@@ -122,14 +130,16 @@ TEST(NT4SourceNodeSerializeTest, SanitizesNegativeTeamAndPortOnLoad) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<NT4SourceNode*>(restored.FindNodeById(1));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().team, 0);
-  EXPECT_EQ(loaded->Logic().port, static_cast<int>(NT_DEFAULT_PORT));
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().team == 0);
+  CHECK(loaded->Logic().port == static_cast<int>(NT_DEFAULT_PORT));
 }
 
-TEST(NT4SourceNodeSerializeTest, MissingFieldsUseDefaults) {
+TEST_CASE("NT4SourceNodeSerializeTest MissingFieldsUseDefaults",
+          "[filterdesigner]") {
   // Forward-compat: a graph written by a future build that drops a field, or
   // a hand-rolled file with the minimum keys present.
   NodeRegistry reg;
@@ -144,18 +154,20 @@ TEST(NT4SourceNodeSerializeTest, MissingFieldsUseDefaults) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<NT4SourceNode*>(restored.FindNodeById(7));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().serverMode, NT4SourceNodeLogic::ServerMode::Host);
-  EXPECT_EQ(loaded->Logic().host, "127.0.0.1");
-  EXPECT_EQ(loaded->Logic().port, static_cast<int>(NT_DEFAULT_PORT));
-  EXPECT_TRUE(loaded->Logic().TopicName().empty());
-  EXPECT_DOUBLE_EQ(loaded->Logic().BufferSeconds(), 30.0);
-  EXPECT_FALSE(loaded->Logic().Frozen());
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().serverMode == NT4SourceNodeLogic::ServerMode::Host);
+  CHECK(loaded->Logic().host == "127.0.0.1");
+  CHECK(loaded->Logic().port == static_cast<int>(NT_DEFAULT_PORT));
+  CHECK(loaded->Logic().TopicName().empty());
+  CHECK_DOUBLE_EQ(loaded->Logic().BufferSeconds(), 30.0);
+  CHECK_FALSE(loaded->Logic().Frozen());
 }
 
-TEST(NT4SourceNodeSerializeTest, SignalNullUntilDrainProducesSamples) {
+TEST_CASE("NT4SourceNodeSerializeTest SignalNullUntilDrainProducesSamples",
+          "[filterdesigner]") {
   // The OutPin behaviour returns Logic::Signal() which is null while the
   // buffer is empty — downstream sinks rely on that null check to skip
   // rendering. Make sure a freshly-loaded node still honors that contract
@@ -169,14 +181,17 @@ TEST(NT4SourceNodeSerializeTest, SignalNullUntilDrainProducesSamples) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded =
       dynamic_cast<NT4SourceNode*>(restored.FindNodeById(node->GraphId()));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().Signal(), nullptr);
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().Signal() == nullptr);
 }
 
-TEST(NT4SourceNodeSerializeTest, ConstructionDoesNotAllocateNtcoreInstance) {
+TEST_CASE(
+    "NT4SourceNodeSerializeTest ConstructionDoesNotAllocateNtcoreInstance",
+    "[filterdesigner]") {
   // The wrapped NetworkTableInstance must be lazy. If a future refactor
   // reverts to eagerly Create()ing in the ctor, every test in this suite
   // (and every node ever instantiated on graph load) would silently leak
@@ -186,11 +201,12 @@ TEST(NT4SourceNodeSerializeTest, ConstructionDoesNotAllocateNtcoreInstance) {
   RegisterAll(reg);
   Graph graph;
   auto node = graph.AddNode<NT4SourceNode>(ImVec2{0.0f, 0.0f});
-  EXPECT_FALSE(node->IsInstanceCreated())
-      << "NT instance must stay null until the user clicks Connect";
+  UNSCOPED_INFO("NT instance must stay null until the user clicks Connect");
+  CHECK_FALSE(node->IsInstanceCreated());
 }
 
-TEST(NT4SourceNodeSerializeTest, SanitizePortCapsAboveMaxOnLoad) {
+TEST_CASE("NT4SourceNodeSerializeTest SanitizePortCapsAboveMaxOnLoad",
+          "[filterdesigner]") {
   // SanitizePort now caps at 65535 — a hand-edited file with port: 99999
   // shouldn't pass nonsense to ntcore. Pairs with the existing
   // SanitizesNegativeTeamAndPortOnLoad case which only exercises the lower
@@ -209,11 +225,12 @@ TEST(NT4SourceNodeSerializeTest, SanitizePortCapsAboveMaxOnLoad) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<NT4SourceNode*>(restored.FindNodeById(1));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_LE(loaded->Logic().port, 65535);
-  EXPECT_GE(loaded->Logic().port, 1);
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().port <= 65535);
+  CHECK(loaded->Logic().port >= 1);
 }
 
 }  // namespace

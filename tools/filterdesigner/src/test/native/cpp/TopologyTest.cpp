@@ -10,7 +10,7 @@
 #include <string_view>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
@@ -71,30 +71,30 @@ class TwoInPassNode : public FilterDesignerNode {
   std::string_view TypeTag() const override { return "TwoInPass"; }
 };
 
-TEST(TopologyTest, EmptyGraphIsAcyclic) {
+TEST_CASE("TopologyTest EmptyGraphIsAcyclic", "[filterdesigner]") {
   Graph g;
-  EXPECT_FALSE(HasCycle(g));
-  EXPECT_TRUE(FindCycle(g).empty());
+  CHECK_FALSE(HasCycle(g));
+  CHECK(FindCycle(g).empty());
 }
 
-TEST(TopologyTest, IsolatedNodesAreAcyclic) {
+TEST_CASE("TopologyTest IsolatedNodesAreAcyclic", "[filterdesigner]") {
   Graph g;
   g.AddNode<PassthroughNode>(ImVec2{0, 0}, "A");
   g.AddNode<PassthroughNode>(ImVec2{0, 0}, "B");
-  EXPECT_FALSE(HasCycle(g));
+  CHECK_FALSE(HasCycle(g));
 }
 
-TEST(TopologyTest, LinearChainIsAcyclic) {
+TEST_CASE("TopologyTest LinearChainIsAcyclic", "[filterdesigner]") {
   Graph g;
   auto src = g.AddNode<SourceOnlyNode>(ImVec2{0, 0}, "Src");
   auto mid = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "Mid");
   auto sink = g.AddNode<SinkOnlyNode>(ImVec2{0, 0}, "Sink");
   mid->inPin("in")->createLink(src->outPin("out"));
   sink->inPin("in")->createLink(mid->outPin("out"));
-  EXPECT_FALSE(HasCycle(g));
+  CHECK_FALSE(HasCycle(g));
 }
 
-TEST(TopologyTest, DiamondDagIsAcyclic) {
+TEST_CASE("TopologyTest DiamondDagIsAcyclic", "[filterdesigner]") {
   Graph g;
   auto a = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "A");
   auto b = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "B");
@@ -109,28 +109,28 @@ TEST(TopologyTest, DiamondDagIsAcyclic) {
   // (B→D and B comes from A, plus the dangling C→D attempt collapses to a
   // single edge).
   d->inPin("in")->createLink(c->outPin("out"));
-  EXPECT_FALSE(HasCycle(g));
+  CHECK_FALSE(HasCycle(g));
 }
 
-TEST(TopologyTest, TwoNodeCycleIsDetected) {
+TEST_CASE("TopologyTest TwoNodeCycleIsDetected", "[filterdesigner]") {
   Graph g;
   auto a = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "A");
   auto b = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "B");
   a->inPin("in")->createLink(b->outPin("out"));
   b->inPin("in")->createLink(a->outPin("out"));
 
-  EXPECT_TRUE(HasCycle(g));
+  CHECK(HasCycle(g));
   auto path = FindCycle(g);
-  ASSERT_GE(path.size(), 3u);
+  REQUIRE(path.size() >= 3u);
   // Path is closed: first == last.
-  EXPECT_EQ(path.front(), path.back());
+  CHECK(path.front() == path.back());
   // The cycle includes both nodes exactly once (plus the closing repeat).
-  EXPECT_EQ(path.size(), 3u);
-  EXPECT_TRUE((path[0] == a->GraphId() && path[1] == b->GraphId()) ||
-              (path[0] == b->GraphId() && path[1] == a->GraphId()));
+  CHECK(path.size() == 3u);
+  CHECK(((path[0] == a->GraphId() && path[1] == b->GraphId()) ||
+         (path[0] == b->GraphId() && path[1] == a->GraphId())));
 }
 
-TEST(TopologyTest, ThreeNodeCycleIsDetected) {
+TEST_CASE("TopologyTest ThreeNodeCycleIsDetected", "[filterdesigner]") {
   Graph g;
   auto a = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "A");
   auto b = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "B");
@@ -139,14 +139,14 @@ TEST(TopologyTest, ThreeNodeCycleIsDetected) {
   c->inPin("in")->createLink(b->outPin("out"));
   a->inPin("in")->createLink(c->outPin("out"));
 
-  EXPECT_TRUE(HasCycle(g));
+  CHECK(HasCycle(g));
   auto path = FindCycle(g);
   // Three distinct ids in the cycle, first repeated at end.
-  ASSERT_EQ(path.size(), 4u);
-  EXPECT_EQ(path.front(), path.back());
+  REQUIRE(path.size() == 4u);
+  CHECK(path.front() == path.back());
 }
 
-TEST(TopologyTest, SelfLoopIsDetected) {
+TEST_CASE("TopologyTest SelfLoopIsDetected", "[filterdesigner]") {
   // Smallest non-trivial cycle: a single passthrough wired to itself.
   // Production nodes leave ImNodeFlow's m_allowSelfConnection=false default
   // in place, so users can't draw self-links interactively — but a corrupted
@@ -163,14 +163,14 @@ TEST(TopologyTest, SelfLoopIsDetected) {
       ->allowSameNodeConnections(true);
   a->inPin("in")->createLink(a->outPin("out"));
 
-  EXPECT_TRUE(HasCycle(g));
+  CHECK(HasCycle(g));
   auto path = FindCycle(g);
-  ASSERT_EQ(path.size(), 2u);
-  EXPECT_EQ(path[0], a->GraphId());
-  EXPECT_EQ(path[1], a->GraphId());
+  REQUIRE(path.size() == 2u);
+  CHECK(path[0] == a->GraphId());
+  CHECK(path[1] == a->GraphId());
 }
 
-TEST(TopologyTest, CycleWithLeadingTailExcludesTail) {
+TEST_CASE("TopologyTest CycleWithLeadingTailExcludesTail", "[filterdesigner]") {
   // Tail S → A, then a cycle A ↔ B (edges A→B and B→A). A is a two-input
   // node so it can hold both the tail-link (S→A on in0) and the back-edge
   // (B→A on in1) at once — single-in-pin nodes can't model this because
@@ -190,16 +190,16 @@ TEST(TopologyTest, CycleWithLeadingTailExcludesTail) {
   b->inPin("in")->createLink(a->outPin("out"));   // cycle leg A → B
   a->inPin("in1")->createLink(b->outPin("out"));  // cycle leg B → A
 
-  EXPECT_TRUE(HasCycle(g));
+  CHECK(HasCycle(g));
   auto path = FindCycle(g);
-  ASSERT_EQ(path.size(), 3u);
-  EXPECT_EQ(path.front(), path.back());
+  REQUIRE(path.size() == 3u);
+  CHECK(path.front() == path.back());
   for (int id : path) {
-    EXPECT_NE(id, s->GraphId());
+    CHECK(id != s->GraphId());
   }
 }
 
-TEST(TopologyTest, CycleDetectedAmidAcyclicSubgraph) {
+TEST_CASE("TopologyTest CycleDetectedAmidAcyclicSubgraph", "[filterdesigner]") {
   // One subgraph with a clean A → B → Sink; a separate disconnected cycle
   // C ↔ D. FindCycle should still surface the cycle.
   Graph g;
@@ -214,18 +214,18 @@ TEST(TopologyTest, CycleDetectedAmidAcyclicSubgraph) {
   c->inPin("in")->createLink(d->outPin("out"));
   d->inPin("in")->createLink(c->outPin("out"));
 
-  EXPECT_TRUE(HasCycle(g));
+  CHECK(HasCycle(g));
   auto path = FindCycle(g);
-  ASSERT_FALSE(path.empty());
+  REQUIRE_FALSE(path.empty());
   // The cycle path should not include the acyclic-subgraph nodes.
   for (int id : path) {
-    EXPECT_NE(id, a->GraphId());
-    EXPECT_NE(id, b->GraphId());
-    EXPECT_NE(id, sink->GraphId());
+    CHECK(id != a->GraphId());
+    CHECK(id != b->GraphId());
+    CHECK(id != sink->GraphId());
   }
 }
 
-TEST(TopologyTest, FormatCycleUsesTitlesAndIds) {
+TEST_CASE("TopologyTest FormatCycleUsesTitlesAndIds", "[filterdesigner]") {
   Graph g;
   auto a = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "Alpha");
   auto b = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "Beta");
@@ -235,30 +235,29 @@ TEST(TopologyTest, FormatCycleUsesTitlesAndIds) {
   auto path = FindCycle(g);
   std::string s = FormatCycle(g, path);
   // U+2192 in UTF-8 is e2 86 92.
-  EXPECT_NE(s.find("\xe2\x86\x92"), std::string::npos);
-  EXPECT_NE(s.find("Alpha"), std::string::npos);
-  EXPECT_NE(s.find("Beta"), std::string::npos);
-  EXPECT_NE(s.find("[" + std::to_string(a->GraphId()) + "]"),
-            std::string::npos);
-  EXPECT_NE(s.find("[" + std::to_string(b->GraphId()) + "]"),
-            std::string::npos);
+  CHECK(s.find("\xe2\x86\x92") != std::string::npos);
+  CHECK(s.find("Alpha") != std::string::npos);
+  CHECK(s.find("Beta") != std::string::npos);
+  CHECK(s.find("[" + std::to_string(a->GraphId()) + "]") != std::string::npos);
+  CHECK(s.find("[" + std::to_string(b->GraphId()) + "]") != std::string::npos);
 }
 
-TEST(TopologyTest, FormatCycleEmptyOnEmptyPath) {
+TEST_CASE("TopologyTest FormatCycleEmptyOnEmptyPath", "[filterdesigner]") {
   Graph g;
-  EXPECT_EQ(FormatCycle(g, {}), "");
+  CHECK(FormatCycle(g, {}) == "");
 }
 
-TEST(TopologyTest, GraphCycleErrorEmptyByDefault) {
+TEST_CASE("TopologyTest GraphCycleErrorEmptyByDefault", "[filterdesigner]") {
   Graph g;
   // RecomputeCycleError is what Graph::Update calls per frame; we drive it
   // here so the test exercises the same code path without needing an ImGui
   // context.
   g.RecomputeCycleError();
-  EXPECT_TRUE(g.CycleError().empty());
+  CHECK(g.CycleError().empty());
 }
 
-TEST(TopologyTest, GraphCycleErrorPopulatedAfterCycle) {
+TEST_CASE("TopologyTest GraphCycleErrorPopulatedAfterCycle",
+          "[filterdesigner]") {
   Graph g;
   auto a = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "A");
   auto b = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "B");
@@ -266,44 +265,45 @@ TEST(TopologyTest, GraphCycleErrorPopulatedAfterCycle) {
   b->inPin("in")->createLink(a->outPin("out"));
 
   g.RecomputeCycleError();
-  EXPECT_FALSE(g.CycleError().empty());
-  EXPECT_NE(g.CycleError().find("A"), std::string::npos);
-  EXPECT_NE(g.CycleError().find("B"), std::string::npos);
+  CHECK_FALSE(g.CycleError().empty());
+  CHECK(g.CycleError().find("A") != std::string::npos);
+  CHECK(g.CycleError().find("B") != std::string::npos);
 }
 
-TEST(TopologyTest, GraphCycleErrorClearedByReset) {
+TEST_CASE("TopologyTest GraphCycleErrorClearedByReset", "[filterdesigner]") {
   Graph g;
   auto a = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "A");
   auto b = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "B");
   a->inPin("in")->createLink(b->outPin("out"));
   b->inPin("in")->createLink(a->outPin("out"));
   g.RecomputeCycleError();
-  ASSERT_FALSE(g.CycleError().empty());
+  REQUIRE_FALSE(g.CycleError().empty());
 
   g.Reset();
   // Reset drops every node + link; the cached error must follow suit so a
   // post-load graph doesn't show a stale banner before its first
   // RecomputeCycleError tick.
-  EXPECT_TRUE(g.CycleError().empty());
+  CHECK(g.CycleError().empty());
 }
 
-TEST(TopologyTest, NodeGetGraphPopulatedByAddNode) {
+TEST_CASE("TopologyTest NodeGetGraphPopulatedByAddNode", "[filterdesigner]") {
   // Sinks reach back to their owning Graph via GetGraph(); without this
   // wiring the cycle banner can't fire in production. Cover the contract
   // directly here.
   Graph g;
   auto n = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "N");
-  EXPECT_EQ(n->GetGraph(), &g);
+  CHECK(n->GetGraph() == &g);
 }
 
-TEST(TopologyTest, NodeGetGraphPopulatedByAddNodeWithId) {
+TEST_CASE("TopologyTest NodeGetGraphPopulatedByAddNodeWithId",
+          "[filterdesigner]") {
   // The deserializer uses AddNodeWithId, so it also needs to wire the
   // back-pointer. Cover that path too — otherwise loaded sinks would silently
   // miss the cycle banner until the user touched them.
   Graph g;
   auto n = g.AddNodeWithId<PassthroughNode>(ImVec2{0, 0}, 42, "N");
-  EXPECT_EQ(n->GetGraph(), &g);
-  EXPECT_EQ(n->GraphId(), 42);
+  CHECK(n->GetGraph() == &g);
+  CHECK(n->GraphId() == 42);
 }
 
 }  // namespace

@@ -11,8 +11,9 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/datalog/DataLogWriter.hpp"
 #include "wpi/util/Logger.hpp"
 #include "wpi/util/raw_ostream.hpp"
@@ -21,7 +22,7 @@ namespace {
 
 using wpi::filterdesigner::WpiLogSourceNodeLogic;
 
-class WpiLogSourceNodeLogicTest : public ::testing::Test {
+class WpiLogSourceNodeLogicTest {
  public:
   wpi::util::Logger msglog;
   std::vector<uint8_t> data;
@@ -29,60 +30,71 @@ class WpiLogSourceNodeLogicTest : public ::testing::Test {
       msglog, std::make_unique<wpi::util::raw_uvector_ostream>(data)};
 };
 
-TEST_F(WpiLogSourceNodeLogicTest, FreshLogicIsEmpty) {
+TEST_CASE_METHOD(WpiLogSourceNodeLogicTest,
+                 "WpiLogSourceNodeLogicTest FreshLogicIsEmpty",
+                 "[filterdesigner]") {
   WpiLogSourceNodeLogic logic;
-  EXPECT_FALSE(logic.HasFile());
-  EXPECT_EQ(logic.Signal(), nullptr);
-  EXPECT_TRUE(logic.LogPath().empty());
-  EXPECT_TRUE(logic.SelectedEntry().empty());
-  EXPECT_TRUE(logic.LoadError().empty());
+  CHECK_FALSE(logic.HasFile());
+  CHECK(logic.Signal() == nullptr);
+  CHECK(logic.LogPath().empty());
+  CHECK(logic.SelectedEntry().empty());
+  CHECK(logic.LoadError().empty());
 }
 
-TEST_F(WpiLogSourceNodeLogicTest, OpenBufferAndSelectEntryExposesSignal) {
+TEST_CASE_METHOD(
+    WpiLogSourceNodeLogicTest,
+    "WpiLogSourceNodeLogicTest OpenBufferAndSelectEntryExposesSignal",
+    "[filterdesigner]") {
   wpi::log::DoubleLogEntry d{log, "/accel/x", 0};
-  d.Append(0.5, 1000);
-  d.Append(0.75, 2000);
-  d.Append(1.0, 3000);
+  d.Append(0.5, 1'000'000);
+  d.Append(0.75, 2'000'000);
+  d.Append(1.0, 3'000'000);
   log.Flush();
 
   WpiLogSourceNodeLogic logic;
-  ASSERT_TRUE(logic.OpenBuffer(data));
-  EXPECT_TRUE(logic.HasFile());
-  EXPECT_EQ(logic.Signal(), nullptr) << "no entry selected yet";
+  REQUIRE(logic.OpenBuffer(data));
+  CHECK(logic.HasFile());
+  UNSCOPED_INFO("no entry selected yet");
+  CHECK(logic.Signal() == nullptr);
 
-  ASSERT_TRUE(logic.SelectEntry("/accel/x"));
+  REQUIRE(logic.SelectEntry("/accel/x"));
   const auto* sig = logic.Signal();
-  ASSERT_NE(sig, nullptr);
-  EXPECT_EQ(sig->name, "/accel/x");
-  ASSERT_EQ(sig->values.size(), 3u);
-  EXPECT_DOUBLE_EQ(sig->values[0], 0.5);
-  EXPECT_DOUBLE_EQ(sig->values[2], 1.0);
-  EXPECT_GT(sig->revision, 0u);
+  REQUIRE(sig != nullptr);
+  CHECK(sig->name == "/accel/x");
+  REQUIRE(sig->values.size() == 3u);
+  CHECK_DOUBLE_EQ(sig->values[0], 0.5);
+  CHECK_DOUBLE_EQ(sig->values[2], 1.0);
+  CHECK(sig->revision > 0u);
 }
 
-TEST_F(WpiLogSourceNodeLogicTest,
-       SelectMissingEntryKeepsPreviousAndReportsError) {
+TEST_CASE_METHOD(
+    WpiLogSourceNodeLogicTest,
+    "WpiLogSourceNodeLogicTest SelectMissingEntryKeepsPreviousAndReportsError",
+    "[filterdesigner]") {
   wpi::log::DoubleLogEntry d{log, "good", 0};
-  d.Append(1.0, 1);
+  d.Append(1.0, 1'000);
   log.Flush();
 
   WpiLogSourceNodeLogic logic;
-  ASSERT_TRUE(logic.OpenBuffer(data));
-  ASSERT_TRUE(logic.SelectEntry("good"));
+  REQUIRE(logic.OpenBuffer(data));
+  REQUIRE(logic.SelectEntry("good"));
   const auto* before = logic.Signal();
-  ASSERT_NE(before, nullptr);
+  REQUIRE(before != nullptr);
 
-  EXPECT_FALSE(logic.SelectEntry("missing"));
-  EXPECT_FALSE(logic.LoadError().empty());
+  CHECK_FALSE(logic.SelectEntry("missing"));
+  CHECK_FALSE(logic.LoadError().empty());
   // Previous selection is preserved on a failed pick.
-  EXPECT_EQ(logic.Signal(), before);
-  EXPECT_EQ(logic.SelectedEntry(), "good");
+  CHECK(logic.Signal() == before);
+  CHECK(logic.SelectedEntry() == "good");
 }
 
-TEST_F(WpiLogSourceNodeLogicTest, RestoreFromPathOpensFileAndPicksEntry) {
+TEST_CASE_METHOD(
+    WpiLogSourceNodeLogicTest,
+    "WpiLogSourceNodeLogicTest RestoreFromPathOpensFileAndPicksEntry",
+    "[filterdesigner]") {
   wpi::log::DoubleLogEntry d{log, "persisted", 0};
-  d.Append(2.0, 1);
-  d.Append(4.0, 2);
+  d.Append(2.0, 1'000);
+  d.Append(4.0, 2'000);
   log.Flush();
 
   auto tmp = std::filesystem::temp_directory_path() /
@@ -92,37 +104,42 @@ TEST_F(WpiLogSourceNodeLogicTest, RestoreFromPathOpensFileAndPicksEntry) {
               ".wpilog");
   {
     std::ofstream out{tmp, std::ios::binary};
-    ASSERT_TRUE(out.is_open());
+    REQUIRE(out.is_open());
     out.write(reinterpret_cast<const char*>(data.data()),
               static_cast<std::streamsize>(data.size()));
   }
 
   WpiLogSourceNodeLogic logic;
   logic.RestoreFromPath(tmp.string(), "persisted");
-  EXPECT_TRUE(logic.HasFile());
-  EXPECT_EQ(logic.SelectedEntry(), "persisted");
-  ASSERT_NE(logic.Signal(), nullptr);
-  EXPECT_EQ(logic.Signal()->values.size(), 2u);
-  EXPECT_TRUE(logic.LoadError().empty());
+  CHECK(logic.HasFile());
+  CHECK(logic.SelectedEntry() == "persisted");
+  REQUIRE(logic.Signal() != nullptr);
+  CHECK(logic.Signal()->values.size() == 2u);
+  CHECK(logic.LoadError().empty());
 
   std::filesystem::remove(tmp);
 }
 
-TEST_F(WpiLogSourceNodeLogicTest, RestoreFromMissingPathLeavesErrorState) {
+TEST_CASE_METHOD(
+    WpiLogSourceNodeLogicTest,
+    "WpiLogSourceNodeLogicTest RestoreFromMissingPathLeavesErrorState",
+    "[filterdesigner]") {
   WpiLogSourceNodeLogic logic;
   logic.RestoreFromPath("/no/such/file.wpilog", "entry");
-  EXPECT_FALSE(logic.HasFile());
-  EXPECT_EQ(logic.Signal(), nullptr);
-  EXPECT_FALSE(logic.LoadError().empty())
-      << "missing file should produce a re-pick banner, not throw";
-  EXPECT_EQ(logic.LogPath(), "/no/such/file.wpilog")
-      << "path is remembered so the UI can offer to re-pick";
+  CHECK_FALSE(logic.HasFile());
+  CHECK(logic.Signal() == nullptr);
+  UNSCOPED_INFO("missing file should produce a re-pick banner, not throw");
+  CHECK_FALSE(logic.LoadError().empty());
+  UNSCOPED_INFO("path is remembered so the UI can offer to re-pick");
+  CHECK(logic.LogPath() == "/no/such/file.wpilog");
 }
 
-TEST_F(WpiLogSourceNodeLogicTest,
-       RestoreWithMissingEntryLoadsFileAndSurfacesError) {
+TEST_CASE_METHOD(WpiLogSourceNodeLogicTest,
+                 "WpiLogSourceNodeLogicTest "
+                 "RestoreWithMissingEntryLoadsFileAndSurfacesError",
+                 "[filterdesigner]") {
   wpi::log::DoubleLogEntry d{log, "still_here", 0};
-  d.Append(1.0, 1);
+  d.Append(1.0, 1'000);
   log.Flush();
 
   auto tmp = std::filesystem::temp_directory_path() /
@@ -138,27 +155,31 @@ TEST_F(WpiLogSourceNodeLogicTest,
 
   WpiLogSourceNodeLogic logic;
   logic.RestoreFromPath(tmp.string(), "gone");
-  EXPECT_TRUE(logic.HasFile()) << "log still opens";
-  EXPECT_EQ(logic.Signal(), nullptr) << "but the named entry is missing";
-  EXPECT_FALSE(logic.LoadError().empty());
+  UNSCOPED_INFO("log still opens");
+  CHECK(logic.HasFile());
+  UNSCOPED_INFO("but the named entry is missing");
+  CHECK(logic.Signal() == nullptr);
+  CHECK_FALSE(logic.LoadError().empty());
 
   std::filesystem::remove(tmp);
 }
 
-TEST_F(WpiLogSourceNodeLogicTest, RevisionAdvancesAcrossSelections) {
+TEST_CASE_METHOD(WpiLogSourceNodeLogicTest,
+                 "WpiLogSourceNodeLogicTest RevisionAdvancesAcrossSelections",
+                 "[filterdesigner]") {
   wpi::log::DoubleLogEntry a{log, "a", 0};
   wpi::log::DoubleLogEntry b{log, "b", 0};
-  a.Append(1.0, 1);
-  b.Append(2.0, 2);
+  a.Append(1.0, 1'000);
+  b.Append(2.0, 2'000);
   log.Flush();
 
   WpiLogSourceNodeLogic logic;
-  ASSERT_TRUE(logic.OpenBuffer(data));
+  REQUIRE(logic.OpenBuffer(data));
 
-  ASSERT_TRUE(logic.SelectEntry("a"));
+  REQUIRE(logic.SelectEntry("a"));
   auto firstRev = logic.Signal()->revision;
-  ASSERT_TRUE(logic.SelectEntry("b"));
-  EXPECT_GT(logic.Signal()->revision, firstRev);
+  REQUIRE(logic.SelectEntry("b"));
+  CHECK(logic.Signal()->revision > firstRev);
 }
 
 }  // namespace

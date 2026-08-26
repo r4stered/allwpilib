@@ -6,7 +6,7 @@
 #include <string>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include "wpi/filterdesigner/codegen/CodeGen.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
@@ -24,7 +24,7 @@ using wpi::filterdesigner::Language;
 using wpi::filterdesigner::NodeRegistry;
 using wpi::filterdesigner::SerializeGraph;
 
-TEST(ExportNodeSerializeTest, ParamsRoundTrip) {
+TEST_CASE("ExportNodeSerializeTest ParamsRoundTrip", "[filterdesigner]") {
   NodeRegistry reg;
   ExportNode::Register(reg);
 
@@ -39,12 +39,13 @@ TEST(ExportNodeSerializeTest, ParamsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<ExportNode*>(restored.FindNodeById(id));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->Logic().lang, Language::Java);
-  EXPECT_EQ(loaded->Logic().className, "ShooterFilter");
-  EXPECT_EQ(loaded->Logic().projectRoot, "/path/to/robot");
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().lang == Language::Java);
+  CHECK(loaded->Logic().className == "ShooterFilter");
+  CHECK(loaded->Logic().projectRoot == "/path/to/robot");
 }
 
 }  // namespace

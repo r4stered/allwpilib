@@ -24,7 +24,7 @@ void NT4Source::Update() {
       if (!m_haveT0) {
         // Capture t0 from the first buffered sample, not the first drained
         // one, so freeze→drain-discarded samples don't pin the origin.
-        m_t0Micros = newSamples.front().timeMicros;
+        m_t0Nanos = newSamples.front().timeNanos;
         m_haveT0 = true;
       }
       for (const auto& s : newSamples) {
@@ -34,11 +34,11 @@ void NT4Source::Update() {
     }
   }
   if (!m_frozen && !m_buffer.empty()) {
-    // Microseconds per NT convention; SetBufferSeconds guards against
+    // Nanoseconds per NT convention; SetBufferSeconds guards against
     // overflow for any reasonable window length.
-    int64_t windowMicros = static_cast<int64_t>(m_bufferSeconds * 1e6);
-    int64_t cutoff = m_buffer.back().timeMicros - windowMicros;
-    while (!m_buffer.empty() && m_buffer.front().timeMicros < cutoff) {
+    int64_t windowNanos = static_cast<int64_t>(m_bufferSeconds * 1e9);
+    int64_t cutoff = m_buffer.back().timeNanos - windowNanos;
+    while (!m_buffer.empty() && m_buffer.front().timeNanos < cutoff) {
       m_buffer.pop_front();
       changed = true;
     }
@@ -53,7 +53,7 @@ void NT4Source::Update() {
   m_signal.timestamps.reserve(m_buffer.size());
   m_signal.values.reserve(m_buffer.size());
   for (const auto& s : m_buffer) {
-    m_signal.timestamps.push_back((s.timeMicros - m_t0Micros) * 1e-6);
+    m_signal.timestamps.push_back((s.timeNanos - m_t0Nanos) * 1e-9);
     m_signal.values.push_back(s.value);
   }
   m_signal.sampleRate = Signal::InferSampleRate(m_signal.timestamps);
@@ -74,7 +74,7 @@ void NT4Source::Clear() {
   m_signal.sampleRate = 0.0;
   m_signal.uniform = false;
   m_haveT0 = false;
-  m_t0Micros = 0;
+  m_t0Nanos = 0;
   ++m_signal.revision;
 }
 

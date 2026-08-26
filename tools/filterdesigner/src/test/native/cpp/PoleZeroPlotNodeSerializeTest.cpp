@@ -6,8 +6,9 @@
 #include <string>
 
 #include <ImNodeFlow.h>
-#include <gtest/gtest.h>
+#include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/graph/Serialize.hpp"
@@ -25,7 +26,7 @@ using wpi::filterdesigner::NodeRegistry;
 using wpi::filterdesigner::PoleZeroPlotNode;
 using wpi::filterdesigner::SerializeGraph;
 
-TEST(PoleZeroPlotNodeSerializeTest, ParamsRoundTrip) {
+TEST_CASE("PoleZeroPlotNodeSerializeTest ParamsRoundTrip", "[filterdesigner]") {
   NodeRegistry reg;
   PoleZeroPlotNode::Register(reg);
 
@@ -40,15 +41,18 @@ TEST(PoleZeroPlotNodeSerializeTest, ParamsRoundTrip) {
 
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto* loaded = dynamic_cast<PoleZeroPlotNode*>(restored.FindNodeById(id));
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_FALSE(loaded->Logic().showLegend);
-  EXPECT_FLOAT_EQ(loaded->Logic().plotWidth, 500.0f);
-  EXPECT_FLOAT_EQ(loaded->Logic().plotHeight, 500.0f);
+  REQUIRE(loaded != nullptr);
+  CHECK_FALSE(loaded->Logic().showLegend);
+  CHECK_FLOAT_EQ(loaded->Logic().plotWidth, 500.0f);
+  CHECK_FLOAT_EQ(loaded->Logic().plotHeight, 500.0f);
 }
 
-TEST(PoleZeroPlotNodeSerializeTest, BiquadStageToPoleZeroPlotLinkRoundTrips) {
+TEST_CASE(
+    "PoleZeroPlotNodeSerializeTest BiquadStageToPoleZeroPlotLinkRoundTrips",
+    "[filterdesigner]") {
   NodeRegistry reg;
   BiquadStageNode::Register(reg);
   PoleZeroPlotNode::Register(reg);
@@ -63,16 +67,18 @@ TEST(PoleZeroPlotNodeSerializeTest, BiquadStageToPoleZeroPlotLinkRoundTrips) {
   std::string json = SerializeGraph(graph);
   Graph restored;
   auto result = DeserializeGraph(json, restored, reg);
-  ASSERT_TRUE(result.ok()) << result.error;
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
   auto links = restored.Links();
-  ASSERT_EQ(links.size(), 1u);
-  EXPECT_EQ(links[0].srcId, stageId);
-  EXPECT_EQ(links[0].dstId, pzId);
-  EXPECT_EQ(links[0].srcPin, "filter");
-  EXPECT_EQ(links[0].dstPin, "in0");
+  REQUIRE(links.size() == 1u);
+  CHECK(links[0].srcId == stageId);
+  CHECK(links[0].dstId == pzId);
+  CHECK(links[0].srcPin == "filter");
+  CHECK(links[0].dstPin == "in0");
 }
 
-TEST(PoleZeroPlotNodeSerializeTest, ConsumesUpstreamFilterMath) {
+TEST_CASE("PoleZeroPlotNodeSerializeTest ConsumesUpstreamFilterMath",
+          "[filterdesigner]") {
   // Verifies the math the PoleZeroPlot's draw() runs against its upstream
   // filter, without needing an ImGui context. ComputePolesZeros must yield
   // at least one root for a reasonable BiquadStage cascade — pre-fix, no
@@ -88,10 +94,10 @@ TEST(PoleZeroPlotNodeSerializeTest, ConsumesUpstreamFilterMath) {
   pz->inPin("in0")->createLink(stage->outPin("filter"));
 
   const auto* upstream = stage->CombinedFilter();
-  ASSERT_NE(upstream, nullptr);
+  REQUIRE(upstream != nullptr);
   auto roots = wpi::filterdesigner::ComputePolesZeros(upstream->sections);
-  EXPECT_FALSE(roots.poles.empty() && roots.zeros.empty())
-      << "default BiquadStage should produce at least one pole or zero";
+  UNSCOPED_INFO("default BiquadStage should produce at least one pole or zero");
+  CHECK_FALSE((roots.poles.empty() && roots.zeros.empty()));
 }
 
 }  // namespace

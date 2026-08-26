@@ -59,7 +59,7 @@ elseif(APPLE)
     set_target_properties(filterdesigner PROPERTIES MACOSX_BUNDLE YES OUTPUT_NAME "FilterDesigner")
 endif()
 
-if(WITH_TESTS)
+if(WPILIB_WITH_TESTS)
     wpilib_add_test(filterdesigner src/test/native/cpp)
     wpilib_link_macos_gui(filterdesigner_test)
     target_sources(filterdesigner_test PRIVATE ${filterdesigner_src})
@@ -78,6 +78,5 @@ if(WITH_TESTS)
         ntcore
         wpinet
         datalog
-        googletest
     )
 endif()

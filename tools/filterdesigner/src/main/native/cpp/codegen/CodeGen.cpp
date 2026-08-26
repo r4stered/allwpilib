@@ -4,10 +4,9 @@
 
 #include "wpi/filterdesigner/codegen/CodeGen.hpp"
 
+#include <format>
 #include <string>
 #include <string_view>
-
-#include <fmt/format.h>
 
 #include "CodeGenLines.hpp"
 
@@ -20,10 +19,10 @@ namespace {
 
 Lines EmitCpp(const Sections& sections, std::string_view varName) {
   Lines out;
-  out.push_back(fmt::format("wpi::math::BiquadFilter {}{{", varName));
+  out.push_back(std::format("wpi::math::BiquadFilter {}{{", varName));
   for (const Section& s : sections) {
     out.push_back(
-        fmt::format("    {{{:.17g}, {:.17g}, {:.17g}, {:.17g}, {:.17g}}},",
+        std::format("    {{{:.17g}, {:.17g}, {:.17g}, {:.17g}, {:.17g}}},",
                     s.b0, s.b1, s.b2, s.a1, s.a2));
   }
   out.emplace_back("};");
@@ -34,9 +33,9 @@ Lines EmitPython(const Sections& sections, std::string_view varName) {
   Lines out;
   out.emplace_back("from wpimath.filter import BiquadFilter");
   out.emplace_back("");
-  out.push_back(fmt::format("{} = BiquadFilter([", varName));
+  out.push_back(std::format("{} = BiquadFilter([", varName));
   for (const Section& s : sections) {
-    out.push_back(fmt::format(
+    out.push_back(std::format(
         "    BiquadFilter.Section(b0={:.17g}, b1={:.17g}, b2={:.17g}, "
         "a1={:.17g}, a2={:.17g}),",
         s.b0, s.b1, s.b2, s.a1, s.a2));
@@ -47,11 +46,11 @@ Lines EmitPython(const Sections& sections, std::string_view varName) {
 
 Lines EmitJava(const Sections& sections, std::string_view varName) {
   Lines out;
-  out.push_back(fmt::format("BiquadFilter {} = new BiquadFilter(", varName));
+  out.push_back(std::format("BiquadFilter {} = new BiquadFilter(", varName));
   for (size_t i = 0; i < sections.size(); ++i) {
     const Section& s = sections[i];
     std::string_view sep = (i + 1 < sections.size()) ? "," : "";
-    out.push_back(fmt::format(
+    out.push_back(std::format(
         "    new BiquadFilter.Section({:.17g}, {:.17g}, {:.17g}, {:.17g}, "
         "{:.17g}){}",
         s.b0, s.b1, s.b2, s.a1, s.a2, sep));
