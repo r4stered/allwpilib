@@ -15,12 +15,12 @@ model {
             sources {
                 cpp {
                     source {
-                        srcDirs 'imgui/cpp', 'generated/fonts/src', 'stb/cpp', 'implot/cpp', 'imgui/cpp/misc/cpp'
+                        srcDirs 'imgui/cpp', 'generated/fonts/src', 'stb/cpp', 'implot/cpp', 'imnodeflow/src', 'imgui/cpp/misc/cpp'
                         include '*.cpp', 'backends/imgui_impl_sdl3.cpp', 'backends/imgui_impl_sdlgpu3.cpp', 'backends/imgui_impl_sdlrenderer3.cpp'
                     }
                     exportedHeaders {
-                        srcDirs 'imgui/include', 'generated/fonts/include', 'stb/include', 'implot/include', 'imgui/include/misc/cpp', 'imgui/include/backends'
-                        include '*.h', 'backends/imgui_impl_sdl3.h', 'backends/imgui_impl_sdlgpu3.h', 'backends/imgui_impl_sdlrenderer3.h'
+                        srcDirs 'imgui/include', 'generated/fonts/include', 'stb/include', 'implot/include', 'imnodeflow/include', 'imnodeflow/src', 'imgui/include/misc/cpp', 'imgui/include/backends'
+                        include '*.h', '*.inl', 'backends/imgui_impl_sdl3.h', 'backends/imgui_impl_sdlgpu3.h', 'backends/imgui_impl_sdlrenderer3.h'
                     }
                 }
             }
