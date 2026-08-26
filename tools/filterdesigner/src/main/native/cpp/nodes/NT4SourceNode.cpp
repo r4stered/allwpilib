@@ -185,7 +185,7 @@ void NT4SourceNode::StartClient() {
   }
   m_inst.StartClient("filterdesigner");
   if (m_logic->serverMode == NT4SourceNodeLogic::ServerMode::Team) {
-    m_inst.SetServerTeam(static_cast<unsigned int>(m_logic->team),
+    m_inst.SetServerTeam(std::to_string(m_logic->team),
                          static_cast<unsigned int>(m_logic->port));
   } else {
     m_inst.SetServer(m_logic->host, static_cast<unsigned int>(m_logic->port));

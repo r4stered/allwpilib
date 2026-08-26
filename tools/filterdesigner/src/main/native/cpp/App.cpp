@@ -107,7 +107,8 @@ void Application(std::string_view saveDir) {
   gGraphEditor = std::make_unique<wpi::filterdesigner::GraphEditor>(storageDir);
 
   gui::AddLateExecute(DisplayGui);
-  gui::Initialize("WPILib Filter Designer", 1280, 720);
+  gui::Initialize("WPILib Filter Designer", 1280, 720,
+                  gui::RendererPreference::PREFER_2D);
   gui::Main();
 
   gGraphEditor.reset();
