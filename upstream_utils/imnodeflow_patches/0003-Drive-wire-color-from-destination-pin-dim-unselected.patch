@@ -1,38 +1,21 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Drew Williams <drew.williams@capstanmedical.com>
-Date: Wed, 13 May 2026 10:00:00 -0700
-Subject: [PATCH] Drive wire color from destination pin + dim unselected wires
+From: Drew Williams <williams.r.drew@gmail.com>
+Date: Wed, 26 Aug 2026 11:45:18 -0700
+Subject: [PATCH 3/3] Drive wire color from destination pin + dim unselected
+ wires
 
-Two display tweaks in `Link::update`:
-
-1. Color the wire from the *destination* pin's PinStyle instead of the
-   source's. Sink nodes use this to encode per-slot identity — e.g. the
-   four-input plot sinks color `inN` to match the rendered series, and
-   the wire then physically traces the data into the matching curve.
-   The source side still shows its own pin color at the socket, so
-   "where the data comes from" reads via the socket and "what role it
-   plays at the sink" reads via the wire. The drag-out preview keeps
-   using the source pin's color since there's no destination yet.
-
-2. Dim unselected, unhovered wires to ~55% alpha. With everything at
-   full alpha, a thicket of wires reads louder than the nodes the user
-   is actually trying to inspect. Selected and hovered wires keep full
-   alpha (and the existing outline) so they remain the focal point.
-
-Signed-off-by: Drew Williams <drew.williams@capstanmedical.com>
 ---
  src/ImNodeFlow.cpp | 17 ++++++++++++++++-
  1 file changed, 16 insertions(+), 1 deletion(-)
 
 diff --git a/src/ImNodeFlow.cpp b/src/ImNodeFlow.cpp
-index 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 100644
+index 2f494675de1e08b00c15a6248636130d07fc1853..2d489d4879db0189d2c214f4f8f809cae07a36af 100644
 --- a/src/ImNodeFlow.cpp
 +++ b/src/ImNodeFlow.cpp
-@@ -20,10 +20,25 @@ namespace ImFlow {
-                 m_selected = true;
+@@ -22,10 +22,25 @@ namespace ImFlow {
              }
          } else { m_hovered = false; }
-
+ 
 +        // Wire color comes from the *destination* (right) pin so a sink can
 +        // color-code which series a wire feeds (e.g. plot in0 = blue, in1 =
 +        // orange). Source pins keep their own color for the socket itself,
@@ -53,6 +36,6 @@ index 1111111111111111111111111111111111111111..22222222222222222222222222222222
                           thickness + m_left->getStyle()->extra.link_selected_outline_thickness);
 -        smart_bezier(start, end, m_left->getStyle()->color, thickness);
 +        smart_bezier(start, end, base, thickness);
-
+ 
          if (m_selected && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
              m_right->deleteLink();

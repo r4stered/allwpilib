@@ -47,6 +47,7 @@ namespace ImFlow {
     }
 
     Link::~Link() {
+        if (!m_left) return;
         m_left->deleteLink();
     }
 
@@ -82,20 +83,22 @@ namespace ImFlow {
         float titleW = ImGui::GetItemRectSize().x;
 
         // Inputs
-        ImGui::BeginGroup();
-        for (auto &p: m_ins) {
-            p->setPos(ImGui::GetCursorPos());
-            p->update();
-        }
-        for (auto &p: m_dynamicIns) {
-            if (p.first == 1) {
-                p.second->setPos(ImGui::GetCursorPos());
-                p.second->update();
-                p.first = 0;
+        if (!m_ins.empty() || !m_dynamicIns.empty()) {
+            ImGui::BeginGroup();
+            for (auto &p: m_ins) {
+                p->setPos(ImGui::GetCursorPos());
+                p->update();
             }
+            for (auto &p: m_dynamicIns) {
+                if (p.first == 1) {
+                    p.second->setPos(ImGui::GetCursorPos());
+                    p.second->update();
+                    p.first = 0;
+                }
+            }
+            ImGui::EndGroup();
+            ImGui::SameLine();
         }
-        ImGui::EndGroup();
-        ImGui::SameLine();
 
         // Content
         ImGui::BeginGroup();
@@ -153,7 +156,7 @@ namespace ImFlow {
                                  m_style->radius);
         draw_list->AddRectFilled(offset + m_pos - paddingTL, offset + m_pos + headerSize, m_style->header_bg,
                                  m_style->radius, ImDrawFlags_RoundCornersTop);
-
+        m_fullSize = m_size + paddingTL + paddingBR;
         ImU32 col = m_style->border_color;
         float thickness = m_style->border_thickness;
         ImVec2 ptl = paddingTL;
@@ -195,7 +198,7 @@ namespace ImFlow {
         }
         if (m_dragged || (m_selected && m_inf->isNodeDragged())) {
             float step = m_inf->getStyle().grid_size / m_inf->getStyle().grid_subdivisions;
-            m_posTarget += ImGui::GetIO().MouseDelta;
+            m_posTarget += m_inf->getScreenSpaceDelta();
             // "Slam" The position
             m_pos.x = round(m_posTarget.x / step) * step;
             m_pos.y = round(m_posTarget.y / step) * step;
@@ -234,18 +237,18 @@ namespace ImFlow {
                               [](const auto &l) { return !l.lock()->isHovered(); });
     }
 
-    ImVec2 ImNodeFlow::screen2grid(const ImVec2 &p) {
-        if (ImGui::GetCurrentContext() == m_context.getRawContext())
+    ImVec2 ImNodeFlow::screen2grid( const ImVec2 & p )
+    {
+        if ( ImGui::GetCurrentContext() == m_context.getRawContext() )
             return p - m_context.scroll();
-        else
-            return p - m_context.origin() - m_context.scroll() * m_context.scale();
+        return ( p - m_context.origin() ) / m_context.scale() - m_context.scroll();
     }
 
-    ImVec2 ImNodeFlow::grid2screen(const ImVec2 &p) {
-        if (ImGui::GetCurrentContext() == m_context.getRawContext())
+    ImVec2 ImNodeFlow::grid2screen( const ImVec2 & p )
+    {
+        if ( ImGui::GetCurrentContext() == m_context.getRawContext() )
             return p + m_context.scroll();
-        else
-            return p + m_context.origin() + m_context.scroll() * m_context.scale();
+        return ( p + m_context.scroll() ) * m_context.scale() + m_context.origin();
     }
 
     void ImNodeFlow::addLink(std::shared_ptr<Link> &link) {
@@ -345,7 +348,7 @@ namespace ImFlow {
                                      [](const std::weak_ptr<Link> &l) { return l.expired(); }), m_links.end());
 
         // Clearing recursion blacklist
-        m_nodeRecursionBlacklist.clear();
+        m_pinRecursionBlacklist.clear();
 
         m_context.end();
     }

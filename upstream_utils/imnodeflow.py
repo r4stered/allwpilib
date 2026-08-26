@@ -29,7 +29,7 @@ def copy_upstream_src(wpilib_root: Path):
 def main():
     name = "imnodeflow"
     url = "https://github.com/Fattorino/ImNodeFlow.git"
-    tag = "v1.2.2"
+    tag = "e4cb0989c302e0ae324ff03ed1b3f0d2851ee630"
 
     imnodeflow = Lib(name, url, tag, copy_upstream_src)
     imnodeflow.main()

@@ -31,7 +31,7 @@ inline bool operator!=(const ImVec2& lhs, const ImVec2& rhs)
 }
 # endif
 
-# ifndef IMGUI_DEFINE_MATH_OPERATORS_IMPLEMENTED
+# if IMGUI_VERSION_NUM < 19268
 inline ImVec2 operator*(const float lhs, const ImVec2& rhs)
 {
     return ImVec2(lhs * rhs.x, lhs * rhs.y);
