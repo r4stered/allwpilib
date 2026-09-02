@@ -118,9 +118,8 @@ void BodePlotNode::draw() {
     }
   }
 
-  // Surface upstream cascade errors for pins that are wired but produced a
-  // null filter — otherwise the user sees an empty plot with no hint that
-  // the upstream BiquadStage is misconfigured.
+  // Surface upstream cascade errors, or a wired-but-misconfigured stage shows
+  // as an empty plot.
   for (int i = 0; i < kInputCount; ++i) {
     if (filters[i]) {
       continue;
@@ -138,9 +137,7 @@ void BodePlotNode::draw() {
     return;
   }
 
-  // Compute responses up-front so the subplot loop just plots; doing it
-  // inside BeginPlot is fine too but the up-front pass keeps both subplots
-  // in sync if one filter computes to no points (Compute returned nullopt).
+  // Up-front so both subplots agree when one filter computes to no points.
   std::array<std::optional<FrequencyResponse>, kInputCount> responses;
   for (int i = 0; i < kInputCount; ++i) {
     if (filters[i] && !filters[i]->sections.empty() &&
@@ -200,9 +197,7 @@ void BodePlotNode::draw() {
     ImPlot::EndSubplots();
   }
 
-  // Drag-resize grip in the bottom-right corner, same affordance as
-  // TimePlotNode. Anchored to ImGui::GetItemRectMax() which points at the
-  // end of the subplots block.
+  // Drag-resize grip, anchored to the end of the subplots block.
   const float kGripSize = 12.0f;
   ImVec2 plotBR = ImGui::GetItemRectMax();
   ImGui::SetCursorScreenPos(ImVec2{plotBR.x - kGripSize, plotBR.y - kGripSize});

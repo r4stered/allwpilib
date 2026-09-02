@@ -29,11 +29,8 @@ constexpr const char* kRejectV1Message =
     "This .fdsgn file uses an older format (v1) that this tool no longer "
     "supports. Rebuild the design as a node graph and re-save.";
 
-// Pin-name lookups on ImFlow::BaseNode (inPin/outPin) assert + UB-deref on
-// miss — fine when the program knows the pin exists, but the load path is
-// fed by arbitrary JSON and must tolerate unknown names. Iterate the public
-// pin vectors directly so a stale or forward-compat .fdsgn file produces a
-// skip-with-warning instead of crashing the tool.
+// ImFlow::BaseNode's own inPin/outPin assert and UB-deref on a miss, which
+// the load path cannot afford: its pin names come from arbitrary JSON.
 ImFlow::Pin* FindOutPinByName(ImFlow::BaseNode* node, std::string_view name) {
   for (const auto& pin : node->getOuts()) {
     if (pin && pin->getName() == name) {
@@ -92,9 +89,8 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     return result;
   }
 
-  // v1 files (the pre-node-graph Spec format) get a dedicated user-facing
-  // message instead of a generic "bad version" error. Versions newer than
-  // this build understands are rejected for forward compatibility.
+  // v1 is the pre-node-graph format, and gets its own message; a version
+  // newer than this build knows is rejected outright.
   const json* versionNode = root.lookup("version");
   if (!versionNode || !versionNode->is_number()) {
     result.error = kRejectV1Message;
@@ -162,9 +158,8 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
       result.warnings.emplace_back("Factory for '" + type + "' returned null");
       continue;
     }
-    // The factory just minted a fresh id via Graph::AddNode; overwrite it
-    // with the value from disk and re-bump the counter so subsequently-
-    // created nodes don't clash with anything still to be loaded.
+    // The factory minted a fresh id; overwrite it with the one from disk and
+    // re-bump the counter past it.
     node->SetGraphId(id);
     graph.BumpNextIdAbove(id);
     node->DeserializeParams(entry);
@@ -196,8 +191,7 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     FilterDesignerNode* dst =
         graph.FindNodeById(static_cast<int>(dstId->get_number()));
     if (!src || !dst) {
-      // Endpoint was skipped earlier (unknown type, malformed) — drop the link
-      // silently rather than spamming the warning list.
+      // Endpoint was skipped earlier, and already warned about.
       continue;
     }
     ImFlow::Pin* outPin = FindOutPinByName(src, srcPin->get_string());

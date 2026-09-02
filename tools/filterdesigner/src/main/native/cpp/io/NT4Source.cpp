@@ -15,10 +15,8 @@ NT4Source::NT4Source(DrainFn drain) : m_drain{std::move(drain)} {
 void NT4Source::Update() {
   bool changed = false;
   if (m_drain) {
-    // Always drain — if we skipped while frozen, a real subscriber's queue
-    // would grow unboundedly until unfreeze. Discard instead of buffering
-    // so "unfreeze" means "resume from now" rather than "dump whatever
-    // piled up."
+    // Always drain, or a real subscriber's queue grows until unfreeze.
+    // Discarding is what makes unfreeze mean "resume from now".
     auto newSamples = m_drain();
     if (!m_frozen && !newSamples.empty()) {
       if (!m_haveT0) {

@@ -44,10 +44,8 @@ std::string ToSnakeCase(std::string_view name);
  * the example projects' style for @a lang: lowerCamelCase for C++ and Java,
  * snake_case for Python. Characters that can't appear in an identifier become
  * word boundaries, a leading digit is prefixed with an underscore, and an
- * input with nothing usable in it falls back to "filter".
- *
- * Reserved words are not rejected; that would need a per-language keyword
- * table.
+ * input with nothing usable in it falls back to "filter". Reserved words are
+ * not rejected.
  */
 std::string NormalizeVariableName(std::string_view name, Language lang);
 
@@ -78,10 +76,7 @@ std::filesystem::path ResolveExportPath(
     const std::filesystem::path& projectRoot, Language lang,
     std::string_view className);
 
-/**
- * Builds the full file contents — header comment + class wrapper + body.
- * Pure function, no I/O. Useful for unit testing the emitted code.
- */
+/** Builds the full file contents — header comment, class wrapper, body. */
 std::string BuildExportFileContents(const Sections& sections, Language lang,
                                     std::string_view className,
                                     const ExportSpec& spec);

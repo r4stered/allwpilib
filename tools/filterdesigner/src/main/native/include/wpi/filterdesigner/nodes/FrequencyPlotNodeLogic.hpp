@@ -7,9 +7,8 @@
 namespace wpi::filterdesigner {
 
 /**
- * Pure (UI-free) configuration for a FrequencyPlotNode. The spectrum itself
- * is recomputed per-frame from the connected Signal wires via @ref
- * Spectrum::Compute; this struct only holds persisted display options.
+ * Persisted display options for a FrequencyPlotNode. The spectrum itself is
+ * recomputed per frame from the connected Signal wires.
  */
 struct FrequencyPlotNodeLogic {
   /** If true (default) the y-axis rescales to the data each frame. */
@@ -21,11 +20,7 @@ struct FrequencyPlotNodeLogic {
   /** If true, x-axis is log-scaled; default is linear. */
   bool logFrequency = false;
 
-  /**
-   * Plot canvas size in screen pixels. ImNodeFlow nodes auto-size to their
-   * content, so changing these resizes the node body. Persisted so the
-   * user's drag-resize survives save/reload.
-   */
+  /** Canvas size in pixels. The node auto-sizes to it. */
   float plotWidth = 600.0f;
   float plotHeight = 320.0f;
 

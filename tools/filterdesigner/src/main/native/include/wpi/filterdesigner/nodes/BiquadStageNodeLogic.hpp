@@ -19,14 +19,10 @@ namespace wpi::filterdesigner {
  * plus the cached design output and the cached filtered Signal. Exposes
  * stable pointers suitable for ImNodeFlow's pull model.
  *
- * Three pieces of state:
- *   - `stage` + `sampleRate` — the design parameters. UI mutates them in
- *     place; @ref Filter is lazy and re-evaluates when any of them changes.
- *   - cached @ref DesignedFilter — the cascade + the fs it was designed at,
- *     handed downstream through the node's Filter output pin.
- *   - cached filtered @ref Signal — input run through the cascade, served on
- *     the node's Signal output pin. Keyed on (input pointer, input revision,
- *     filter version) so steady-state cost is three integer compares.
+ * The UI mutates `stage` and `sampleRate` in place; both caches are lazy and
+ * re-evaluate when they change. The filtered signal is additionally keyed on
+ * (input pointer, input revision, filter version), so a steady state costs
+ * three integer compares.
  */
 class BiquadStageNodeLogic {
  public:
@@ -35,55 +31,36 @@ class BiquadStageNodeLogic {
   BiquadStageNodeLogic(const BiquadStageNodeLogic&) = delete;
   BiquadStageNodeLogic& operator=(const BiquadStageNodeLogic&) = delete;
 
-  /**
-   * Per-stage design parameters. The UI mutates these in place. @ref Filter
-   * compares them against the last-designed values to decide whether to
-   * redesign.
-   */
+  /** Per-stage design parameters, mutated in place by the UI. */
   Stage stage;
 
-  /**
-   * Sample rate (Hz) the filter is designed at. Used by both the design
-   * factories and emitted on the Filter wire so downstream sinks see the
-   * same fs the cascade was built for.
-   */
+  /** Sample rate (Hz) the filter is designed at, and emitted on the wire. */
   double sampleRate = 1000.0;
 
   /**
-   * When true, @ref sampleRate mirrors the connected input Signal's
-   * @c sampleRate every frame. Hand-editing the field clears this; the
-   * @c Auto checkbox in the node re-enables it. Default true so a stage
-   * dropped onto a connected source picks up the source's rate without an
-   * extra click — without it, a 1000 Hz default applied to a 200 Hz NT4
-   * stream silently shifts every cutoff by 5x.
+   * When true, @ref sampleRate mirrors the connected input's rate. Hand-
+   * editing the field clears it, the node's @c Auto checkbox restores it.
+   * Default true: the 1000 Hz default silently shifts every cutoff by 5x on a
+   * 200 Hz stream.
    */
   bool sampleRateAutoSync = true;
 
   /**
-   * Designs the filter from the current @ref stage + @ref sampleRate, caches
-   * the result, and returns a stable pointer to it. Returns nullptr when the
-   * current parameters are out-of-range for the selected family (e.g.
-   * cutoff above Nyquist); @ref DesignError carries the user-facing message
-   * in that case.
-   *
-   * Lifetime: pointer is valid until the next call to @ref Filter that
-   * triggers a redesign (i.e. when stage or sampleRate changes).
+   * Designs the filter from the current @ref stage and @ref sampleRate and
+   * returns a pointer to the cached result, valid until the next redesign.
+   * Returns nullptr for parameters the family rejects (a cutoff above Nyquist,
+   * say), with the message in @ref DesignError.
    */
   const DesignedFilter* Filter() const;
 
   /**
-   * Returns @p input filtered through the current cascade. Returns nullptr
-   * if @p input is null or if the filter design is invalid. The result is
-   * cached and reused while (input pointer, input revision, filter version)
-   * are unchanged.
+   * Returns @p input filtered through the current cascade, or nullptr if
+   * @p input is null or the design is invalid. The result is cached while
+   * (input pointer, input revision, filter version) hold, and the pointer is
+   * valid until they don't.
    *
-   * Output keeps the input's timestamps array verbatim; only the values
-   * change. The output's @c name is the input name plus a suffix so multi-
-   * stage chains read clearly in plot legends.
-   *
-   * Lifetime: pointer is valid until the next call that invalidates the
-   * cache (different input pointer, different revision, or filter
-   * redesign).
+   * Timestamps carry over verbatim; the name gains a stage suffix so a
+   * multi-stage chain reads clearly in a plot legend.
    */
   const Signal* Filtered(const Signal* input) const;
 

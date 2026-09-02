@@ -141,7 +141,6 @@ void PoleZeroPlotNode::draw() {
     return;
   }
 
-  // Precompute roots up-front so the plot loop is plain plotting.
   std::array<PoleZeroPlot, kInputCount> roots;
   for (int i = 0; i < kInputCount; ++i) {
     if (filters[i] && !filters[i]->sections.empty()) {
@@ -211,7 +210,6 @@ void PoleZeroPlotNode::draw() {
     ImPlot::EndPlot();
   }
 
-  // Drag-resize grip — same affordance as the other plot nodes.
   const float kGripSize = 12.0f;
   ImVec2 plotBR = ImGui::GetItemRectMax();
   ImGui::SetCursorScreenPos(ImVec2{plotBR.x - kGripSize, plotBR.y - kGripSize});

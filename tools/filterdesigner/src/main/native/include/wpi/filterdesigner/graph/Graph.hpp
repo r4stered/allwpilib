@@ -29,8 +29,7 @@ namespace wpi::filterdesigner {
  *     keeps links inside InPins and doesn't expose a queryable list.
  *   - Reset/lookup primitives used by the serializer.
  *
- * Construction is ImGui-free; only Update() / the underlying ImNodeFlow draw
- * paths touch ImGui state, so tests can build graphs without a UI context.
+ * Construction is ImGui-free, so tests can build graphs without a UI context.
  */
 class Graph {
  public:
@@ -100,12 +99,9 @@ class Graph {
   void BumpNextIdAbove(int id) { m_nextId = std::max(m_nextId, id + 1); }
 
   /**
-   * Drops every node + link. Equivalent to constructing a fresh Graph.
-   *
-   * The underlying ImNodeFlow instance is rebuilt, so any callbacks
-   * registered against it (popup attach, drop-link handlers) are dropped on
-   * the floor. Callers that depend on those must re-register inside an
-   * @ref OnReset callback so the rebind happens atomically with the reset.
+   * Drops every node and link by rebuilding the underlying ImNodeFlow, which
+   * also drops every callback registered against it. Callers that depend on
+   * those must re-register from @ref SetOnReset.
    */
   void Reset();
 
@@ -117,14 +113,10 @@ class Graph {
   void SetOnReset(std::function<void()> cb) { m_onReset = std::move(cb); }
 
   /**
-   * Per-frame cycle indicator. Empty when the graph is acyclic; otherwise a
-   * formatted cycle path (see @ref FormatCycle), e.g.
-   * `"Biquad Stage[3] → Biquad Stage[5] → Biquad Stage[3]"`.
-   *
-   * Recomputed by @ref Update before each ImNodeFlow draw pass. Sinks read
-   * this in their `draw()` body and short-circuit when non-empty so that a
-   * user-introduced cycle surfaces as a banner instead of recursing through
-   * pin-pull lambdas.
+   * Per-frame cycle indicator: empty when acyclic, otherwise a formatted cycle
+   * path (see @ref FormatCycle). Sinks read it in `draw()` and short-circuit
+   * when non-empty, so a cycle surfaces as a banner instead of recursing
+   * through pin-pull lambdas.
    */
   const std::string& CycleError() const { return m_cycleError; }
 
@@ -136,10 +128,9 @@ class Graph {
   void RecomputeCycleError();
 
   /**
-   * True if the cursor is over any node's rect. Used by @ref Update to
-   * route the wheel to a plot inside a hovered node rather than letting
-   * the editor zoom the grid. Always false in test builds since the check
-   * needs a live ImGui frame.
+   * True if the cursor is over any node's rect, so @ref Update can route the
+   * wheel to a plot inside that node rather than zooming the grid. Always
+   * false in test builds, which have no ImGui frame.
    */
   bool IsAnyNodeHovered();
 
@@ -148,17 +139,10 @@ class Graph {
   void ConfigureEditor();
 
   /**
-   * Pulls the active ImGui style's colors into ImNodeFlow's grid + per-node
-   * style fields so the editor follows the host wpigui theme rather than
-   * the library defaults. Called from @ref Update each frame — the cost is
-   * negligible at our node counts, and per-frame keeps the editor in sync
-   * if the user switches theme via Glass's View menu.
-   *
-   * Header colors stay at their per-category values (green source / brown
-   * filter / cyan plot / red codegen) — that's deliberate category coding.
-   * Only the body bg, border, and grid colors mirror the theme.
-   *
-   * No-op in test builds (no ImGui context).
+   * Pulls the active ImGui style's colors into ImNodeFlow's grid and per-node
+   * style fields so the editor follows the host wpigui theme. Header colors
+   * stay at their per-category values; only body, border and grid follow.
+   * No-op in test builds.
    */
   void ApplyTheme();
 

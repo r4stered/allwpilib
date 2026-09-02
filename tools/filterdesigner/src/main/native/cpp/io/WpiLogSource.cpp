@@ -74,8 +74,6 @@ std::optional<Signal> WpiLogSource::LoadEntry(std::string_view name) const {
   if (!sig) {
     return std::nullopt;
   }
-  // WPILOG timestamps jitter and drop out, so resample the entry onto a
-  // uniform grid rather than handing downstream a fixed-dt lie.
   sig->ResampleToGrid();
   return sig;
 }

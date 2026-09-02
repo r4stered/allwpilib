@@ -7,10 +7,8 @@
 namespace wpi::filterdesigner {
 
 /**
- * Pure (UI-free) configuration for a BodePlotNode. The actual frequency
- * response is recomputed per-frame from the connected Filter wires via
- * @ref FrequencyResponse::Compute; this struct holds only the persisted
- * display options.
+ * Persisted display options for a BodePlotNode. The response itself is
+ * recomputed per frame from the connected Filter wires.
  */
 struct BodePlotNodeLogic {
   /**
@@ -23,17 +21,12 @@ struct BodePlotNodeLogic {
   bool showLegend = true;
 
   /**
-   * Number of log-spaced grid points used by @ref FrequencyResponse::Compute.
-   * Below ~64 the curves look stairstepped; above ~2048 the cost dominates
-   * the frame for large cascades.
+   * Log-spaced grid points. Below ~64 the curves stairstep; above ~2048 a
+   * large cascade dominates the frame.
    */
   int numPoints = 512;
 
-  /**
-   * Plot canvas size in screen pixels. The plot is two stacked subplots
-   * (magnitude + phase); plotHeight is the *total* canvas height split
-   * across both.
-   */
+  /** Canvas size in pixels; plotHeight covers both stacked subplots. */
   float plotWidth = 600.0f;
   float plotHeight = 360.0f;
 

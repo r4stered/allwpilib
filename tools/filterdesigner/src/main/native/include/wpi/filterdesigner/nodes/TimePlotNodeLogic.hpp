@@ -7,13 +7,8 @@
 namespace wpi::filterdesigner {
 
 /**
- * Pure (UI-free) configuration for a TimePlotNode. The plot itself is pure
- * UI — the connected pins feed it data every frame — but the persisted
- * options (legend on/off, autoscale, etc.) live here so they round-trip
- * through .fdsgn v2 and can be unit-tested as a config struct.
- *
- * Kept intentionally tiny; nodes are expected to grow their @c Logic struct
- * as features land.
+ * Persisted display options for a TimePlotNode, kept out of the node so they
+ * round-trip through .fdsgn v2 and can be tested without ImGui.
  */
 struct TimePlotNodeLogic {
   /**
@@ -25,11 +20,7 @@ struct TimePlotNodeLogic {
   /** If true (default) the legend overlay is shown. */
   bool showLegend = true;
 
-  /**
-   * Plot canvas size, in screen pixels. ImNodeFlow nodes auto-size to their
-   * content, so changing these resizes the entire node. Persisted so the
-   * user's drag-resize survives save/reload.
-   */
+  /** Canvas size in pixels. The node auto-sizes to it. */
   float plotWidth = 600.0f;
   float plotHeight = 320.0f;
 

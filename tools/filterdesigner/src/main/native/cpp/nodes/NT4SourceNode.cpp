@@ -58,9 +58,7 @@ NT4SourceNode::NT4SourceNode()
   setTitle("NT4 Source");
   setStyle(ImFlow::NodeStyle::green());
 
-  // The Logic owns the ring buffer; we hand it a drain closure that reads
-  // from this node's NT subscriber (or yields nothing when no subscription
-  // is active).
+  // The logic owns the ring buffer and drains it through this closure.
   auto* node = this;
   m_logic->SetDrain([node]() -> std::vector<NT4Source::Sample> {
     std::vector<NT4Source::Sample> out;
@@ -93,11 +91,8 @@ NT4SourceNode::NT4SourceNode()
 }
 
 NT4SourceNode::~NT4SourceNode() {
-  // Drain any in-flight async StopClient worker before touching listener /
-  // subscriber handles. The worker holds a copy of m_inst and calls
-  // StopClient on the same ntcore instance these handles are bound to;
-  // tearing the listener queue down underneath a running StopClient would
-  // race on ntcore-internal state. Cheap if no worker is in flight.
+  // Before touching listener or subscriber handles: an in-flight StopClient
+  // worker is calling into the same ntcore instance they are bound to.
   if (m_stopThread.joinable()) {
     m_stopThread.join();
   }
@@ -108,8 +103,6 @@ NT4SourceNode::~NT4SourceNode() {
   }
   m_topicSub = wpi::nt::MultiSubscriber{};
   m_topicPoller = wpi::nt::NetworkTableListenerPoller{};
-  // Sync StopClient + Destroy on shutdown — lazy-created: only Destroy when
-  // we actually Created.
   if (m_clientStarted) {
     m_inst.StopClient();
     m_clientStarted = false;
@@ -157,9 +150,8 @@ void NT4SourceNode::DeserializeParams(const wpi::util::json& obj) {
   if (const auto* p = obj.lookup("frozen"); p && p->is_bool()) {
     m_logic->SetFrozen(p->get_bool());
   }
-  // Connection isn't auto-restored — the user has to click Connect after a
-  // load. Same pattern WpiLogSource uses for "file may have moved", and
-  // avoids surprise network traffic on every graph open.
+  // The connection isn't auto-restored: opening a graph shouldn't put traffic
+  // on the network before the user asks for it.
 }
 
 void NT4SourceNode::Register(NodeRegistry& registry) {
@@ -183,8 +175,7 @@ void NT4SourceNode::StartClient() {
   }
   if (!m_inst) {
     m_inst = wpi::nt::NetworkTableInstance::Create();
-    // Listener poller can't be re-bound to a different instance — rebuild it
-    // alongside m_inst so they share lifetime.
+    // A poller can't be re-bound to another instance.
     m_topicPoller = wpi::nt::NetworkTableListenerPoller{m_inst};
   }
   m_inst.StartClient("filterdesigner");
@@ -196,19 +187,15 @@ void NT4SourceNode::StartClient() {
   }
   m_clientStarted = true;
 
-  // Discovery subscription. NT4 servers only announce topics matched by some
-  // subscriber, so the empty prefix opens the floodgates; "$" picks up meta
-  // topics, topicsOnly suppresses value traffic on this sub.
+  // NT4 servers only announce topics some subscriber matches, so the empty
+  // prefix opens the floodgates; "$" picks up meta topics.
   m_topicSub =
       wpi::nt::MultiSubscriber{m_inst, {{"", "$"}}, {.topicsOnly = true}};
   m_topicListener =
       m_topicPoller.AddListener(m_topicSub, wpi::nt::EventFlags::TOPIC);
 
-  // After a save+load the topic name survives in the logic but the live
-  // GenericSubscriber doesn't — re-arm it on Connect so the user doesn't
-  // have to re-pick the topic from the combo. NT4 will deliver values
-  // once the server announces the topic, even if we subscribed before
-  // discovery completed.
+  // A loaded graph keeps the topic name but not the subscriber. Subscribing
+  // before discovery completes is fine — values arrive once it is announced.
   if (!m_logic->TopicName().empty()) {
     Subscribe(m_logic->TopicName());
   }
@@ -276,9 +263,9 @@ void NT4SourceNode::RefreshTopics() {
 }
 
 void NT4SourceNode::RebuildTopicTree() {
-  // NT topics are already announced sorted-ish and never carry a ':' prefix,
-  // so this is BuildNameTree's plain '/' split; every topic is selectable,
-  // since the discovery subscription only ever asks for numeric types.
+  // NT names never carry a ':' prefix, so this is BuildNameTree's plain '/'
+  // split, and every topic is selectable: discovery only asks for numeric
+  // types.
   std::vector<NameTreeItem> items;
   items.reserve(m_topics.size());
   for (const auto& t : m_topics) {
@@ -290,8 +277,7 @@ void NT4SourceNode::RebuildTopicTree() {
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 
 void NT4SourceNode::draw() {
-  // Always drive the source so a freshly-selected topic starts filling on
-  // the next frame instead of waiting for the user to toggle freeze.
+  // Unconditionally, so a freshly-picked topic starts filling next frame.
   m_logic->Update();
 
   // Drain discovery events — any TOPIC event invalidates the announce list.
@@ -382,10 +368,8 @@ void NT4SourceNode::draw() {
   }
 
   ImGui::Text("%zu samples", m_logic->SampleCount());
-  // Own line rather than appended to the sample count: the readout is long
-  // enough that inlining it stretches the node. Gated on having samples at
-  // all rather than on a known rate — "sample rate unknown" is exactly the
-  // case the user needs told about.
+  // Gated on having samples rather than on a known rate: "sample rate
+  // unknown" is exactly the case worth telling the user about.
   if (m_logic->SampleCount() > 0) {
     DrawSamplingReadout(*m_logic->Source().GetSignal());
   }

@@ -23,11 +23,8 @@ using wpi::filterdesigner::FormatCycle;
 using wpi::filterdesigner::Graph;
 using wpi::filterdesigner::HasCycle;
 
-// Test-only nodes with both an int input and an int output, so cycles are
-// expressible without involving real wpi::filterdesigner data types
-// (Signal*, DesignedFilter*) which would drag in the wider tool dependency
-// graph. Each node sets a distinct title so FormatCycle output is readable
-// and the per-node display string is verifiable.
+// Int in and int out, so a cycle is expressible without the real wire types.
+// Distinct titles make FormatCycle's output verifiable.
 class PassthroughNode : public FilterDesignerNode {
  public:
   explicit PassthroughNode(std::string_view title) {
@@ -56,10 +53,8 @@ class SinkOnlyNode : public FilterDesignerNode {
   std::string_view TypeTag() const override { return "Sink"; }
 };
 
-// Two input pins, one output. Lets a test build "tail D → cycle node A" by
-// landing the tail on a free in-pin while the cycle's back-edge occupies the
-// other one (ImNodeFlow's InPin only holds one upstream link, so a single-in
-// node can't accept both).
+// Two in-pins, so a node can hold a tail link and a cycle's back-edge at once:
+// an InPin holds only one upstream link.
 class TwoInPassNode : public FilterDesignerNode {
  public:
   explicit TwoInPassNode(std::string_view title) {
@@ -103,11 +98,8 @@ TEST_CASE("TopologyTest DiamondDagIsAcyclic", "[filterdesigner]") {
   b->inPin("in")->createLink(a->outPin("out"));
   c->inPin("in")->createLink(a->outPin("out"));
   d->inPin("in")->createLink(b->outPin("out"));
-  // ImNodeFlow's InPin holds at most one upstream Link (createLink replaces
-  // any existing one), so D has only B as a real upstream. That still
-  // exercises the "two reachable predecessors via different paths" topology
-  // (B→D and B comes from A, plus the dangling C→D attempt collapses to a
-  // single edge).
+  // createLink replaces any existing upstream, so D keeps only B — still two
+  // predecessors reachable by different paths, since B comes from A.
   d->inPin("in")->createLink(c->outPin("out"));
   CHECK_FALSE(HasCycle(g));
 }
@@ -147,13 +139,10 @@ TEST_CASE("TopologyTest ThreeNodeCycleIsDetected", "[filterdesigner]") {
 }
 
 TEST_CASE("TopologyTest SelfLoopIsDetected", "[filterdesigner]") {
-  // Smallest non-trivial cycle: a single passthrough wired to itself.
-  // Production nodes leave ImNodeFlow's m_allowSelfConnection=false default
-  // in place, so users can't draw self-links interactively — but a corrupted
-  // saved file could in principle deserialize one, and the topology code
-  // should still terminate cleanly. Enable self-connection on the test pin
-  // to exercise the path-slicer's degenerate-case behaviour (back-edge
-  // target == entry, expected path [A, A]).
+  // The smallest cycle: a passthrough wired to itself. Production nodes keep
+  // ImNodeFlow's m_allowSelfConnection default, so only a corrupted file can
+  // produce one, and the slicer should still terminate — back-edge target ==
+  // entry, path [A, A].
   Graph g;
   auto a = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "A");
   // allowSameNodeConnections lives on InPin<T>, not the Pin* base returned by
@@ -171,17 +160,10 @@ TEST_CASE("TopologyTest SelfLoopIsDetected", "[filterdesigner]") {
 }
 
 TEST_CASE("TopologyTest CycleWithLeadingTailExcludesTail", "[filterdesigner]") {
-  // Tail S → A, then a cycle A ↔ B (edges A→B and B→A). A is a two-input
-  // node so it can hold both the tail-link (S→A on in0) and the back-edge
-  // (B→A on in1) at once — single-in-pin nodes can't model this because
-  // createLink replaces the upstream.
-  //
-  // The point of the test: if DFS happens to start at S, it walks S→A→B,
-  // sees the back-edge to A, and must slice the path *starting at A* (not S).
-  // That exercises the "started" guard inside FindCycleImpl. DFS start order
-  // is non-deterministic (ids come from an unordered_map), so we don't rely
-  // on it — we just assert the cycle path itself excludes S regardless of
-  // entry point, which is the property the slicer guarantees.
+  // Tail S → A, then a cycle A ↔ B. A DFS starting at S walks S→A→B, sees the
+  // back-edge to A, and must slice the path from A — the "started" guard in
+  // FindCycleImpl. Start order is non-deterministic (ids come from an
+  // unordered_map), so the assertion is only that S is not in the cycle.
   Graph g;
   auto s = g.AddNode<SourceOnlyNode>(ImVec2{0, 0}, "S");
   auto a = g.AddNode<TwoInPassNode>(ImVec2{0, 0}, "A");
@@ -249,9 +231,8 @@ TEST_CASE("TopologyTest FormatCycleEmptyOnEmptyPath", "[filterdesigner]") {
 
 TEST_CASE("TopologyTest GraphCycleErrorEmptyByDefault", "[filterdesigner]") {
   Graph g;
-  // RecomputeCycleError is what Graph::Update calls per frame; we drive it
-  // here so the test exercises the same code path without needing an ImGui
-  // context.
+  // What Graph::Update calls per frame, driven directly so the test needs no
+  // ImGui context.
   g.RecomputeCycleError();
   CHECK(g.CycleError().empty());
 }
@@ -280,16 +261,13 @@ TEST_CASE("TopologyTest GraphCycleErrorClearedByReset", "[filterdesigner]") {
   REQUIRE_FALSE(g.CycleError().empty());
 
   g.Reset();
-  // Reset drops every node + link; the cached error must follow suit so a
-  // post-load graph doesn't show a stale banner before its first
-  // RecomputeCycleError tick.
+  // Reset drops every node and link, so the cached error has to go with them
+  // or a freshly-loaded graph shows a stale banner.
   CHECK(g.CycleError().empty());
 }
 
 TEST_CASE("TopologyTest NodeGetGraphPopulatedByAddNode", "[filterdesigner]") {
-  // Sinks reach back to their owning Graph via GetGraph(); without this
-  // wiring the cycle banner can't fire in production. Cover the contract
-  // directly here.
+  // Sinks reach their owning Graph through GetGraph() to draw the banner.
   Graph g;
   auto n = g.AddNode<PassthroughNode>(ImVec2{0, 0}, "N");
   CHECK(n->GetGraph() == &g);
@@ -297,9 +275,8 @@ TEST_CASE("TopologyTest NodeGetGraphPopulatedByAddNode", "[filterdesigner]") {
 
 TEST_CASE("TopologyTest NodeGetGraphPopulatedByAddNodeWithId",
           "[filterdesigner]") {
-  // The deserializer uses AddNodeWithId, so it also needs to wire the
-  // back-pointer. Cover that path too — otherwise loaded sinks would silently
-  // miss the cycle banner until the user touched them.
+  // AddNodeWithId is the deserializer's path, and has to wire the
+  // back-pointer too.
   Graph g;
   auto n = g.AddNodeWithId<PassthroughNode>(ImVec2{0, 0}, 42, "N");
   CHECK(n->GetGraph() == &g);

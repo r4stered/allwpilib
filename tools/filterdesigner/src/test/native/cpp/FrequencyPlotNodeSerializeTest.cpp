@@ -84,11 +84,8 @@ TEST_CASE("FrequencyPlotNodeSerializeTest SizeClampedToMinOnLoad",
 
 TEST_CASE("FrequencyPlotNodeSerializeTest ConsumesUpstreamSignalSpectrum",
           "[filterdesigner]") {
-  // Verifies the math the FrequencyPlot's draw() runs against its upstream
-  // signal, without needing an ImGui context. Impulse → FrequencyPlot in
-  // the canvas would call Spectrum::Compute every frame; verify it on the
-  // Impulse's Signal directly so we know the wire content is in the shape
-  // the plot expects.
+  // The math draw() would run, on the wire content it would run it against —
+  // Spectrum::Compute over the upstream Impulse's Signal, no ImGui needed.
   NodeRegistry reg;
   ImpulseNode::Register(reg);
   FrequencyPlotNode::Register(reg);

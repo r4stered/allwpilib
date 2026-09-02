@@ -117,15 +117,11 @@ void FrequencyPlotNode::draw() {
     return;
   }
 
-  // Compute spectra up-front so the plot loop is plain plotting. Drop any
-  // input that doesn't carry a usable sample rate or is too short.
-  //
-  // Uniform sampling is the loaders' job — see Signal::ResampleToGrid — so
-  // there is nothing to reject here for the ordinary jittery-and-dropped
-  // case. The exception is a signal whose gaps were too large to fill:
-  // quality.onGrid is false, the source node's readout is red, and this
-  // still runs the FFT over nonuniform samples. Segmenting those instead of
-  // refusing them is ticket 002.
+  // Compute spectra up-front so the plot loop is plain plotting. Uniform
+  // sampling is the loaders' job (see Signal::ResampleToGrid), so the only
+  // inputs dropped here are those with no usable rate or too few samples. A
+  // signal whose gaps were too large to fill still gets an FFT over
+  // nonuniform samples; its source node's readout is red.
   std::array<std::optional<Spectrum>, kInputCount> spectra;
   for (int i = 0; i < kInputCount; ++i) {
     const Signal* sig = signals[i];
@@ -165,7 +161,6 @@ void FrequencyPlotNode::draw() {
     ImPlot::EndPlot();
   }
 
-  // Drag-resize grip — same affordance as TimePlotNode / BodePlotNode.
   const float kGripSize = 12.0f;
   ImVec2 plotBR = ImGui::GetItemRectMax();
   ImGui::SetCursorScreenPos(ImVec2{plotBR.x - kGripSize, plotBR.y - kGripSize});

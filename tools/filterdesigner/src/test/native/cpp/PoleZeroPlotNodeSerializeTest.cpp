@@ -79,10 +79,8 @@ TEST_CASE(
 
 TEST_CASE("PoleZeroPlotNodeSerializeTest ConsumesUpstreamFilterMath",
           "[filterdesigner]") {
-  // Verifies the math the PoleZeroPlot's draw() runs against its upstream
-  // filter, without needing an ImGui context. ComputePolesZeros must yield
-  // at least one root for a reasonable BiquadStage cascade — pre-fix, no
-  // test pulled the Filter wire through the plot's data path.
+  // The math draw() would run, on the wire content it would run it against —
+  // ComputePolesZeros over the upstream cascade, no ImGui needed.
   NodeRegistry reg;
   BiquadStageNode::Register(reg);
   PoleZeroPlotNode::Register(reg);

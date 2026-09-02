@@ -25,9 +25,7 @@ class NodeRegistry;
  *     `droppedLinkPopUpContent`; the dragged pin filters the menu and the
  *     popup auto-wires the resulting link after the node is created).
  *
- * Sharing one implementation across the three entry points means menu
- * structure + type filtering stay in lockstep — adding a new node type
- * registers once and surfaces everywhere.
+ * One implementation, so menu structure and type filtering stay in lockstep.
  */
 class CreationPopup {
  public:
@@ -47,10 +45,9 @@ class CreationPopup {
   void RequestOpenAtMouse();
 
   /**
-   * Renders the external (menu-bar-triggered) popup. Must be called every
-   * frame inside an ImGui window/panel so its OpenPopup→BeginPopup state
-   * machine ticks. The right-click and drag-to-canvas popups are driven by
-   * ImNodeFlow itself and don't need to be rendered here.
+   * Renders the menu-bar-triggered popup. Must be called every frame inside an
+   * ImGui window so its OpenPopup→BeginPopup state machine ticks; ImNodeFlow
+   * drives the other two entry points itself.
    */
   void DrawExternal();
 

@@ -80,7 +80,7 @@ TEST_CASE("ImpulseNodeSerializeTest ToBiquadStageToTimePlotChainRoundTrips",
   BiquadStageNode::Register(reg);
   TimePlotNode::Register(reg);
 
-  // Canonical "impulse response" graph — the why-nodes example from the plan.
+  // The canonical impulse-response graph: source → stage → plot.
   Graph graph;
   auto src = graph.AddNode<ImpulseNode>(ImVec2{0.0f, 0.0f});
   auto stage = graph.AddNode<BiquadStageNode>(ImVec2{200.0f, 0.0f});

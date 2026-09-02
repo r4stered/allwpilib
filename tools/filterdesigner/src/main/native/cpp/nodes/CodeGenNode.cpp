@@ -101,9 +101,8 @@ void CodeGenNode::draw() {
   }
 
   const DesignedFilter* filter = getInVal<const DesignedFilter*>("in");
-  // Regenerate every frame — EmitCode is O(N sections) and cheap; the
-  // displayed text needs to follow the upstream cascade without explicit
-  // change tracking.
+  // Every frame: EmitCode is O(sections), and the text has to follow the
+  // upstream cascade.
   std::string code = m_logic->Generate(filter);
   bool haveCode = !code.empty();
 
@@ -114,8 +113,7 @@ void CodeGenNode::draw() {
   ImGui::EndDisabled();
 
   if (!haveCode) {
-    // Distinguish "no upstream wired" from "upstream wired but errored" —
-    // otherwise both render the same misleading "Connect a Filter…" line.
+    // Or a wired-but-errored upstream renders as "Connect a Filter…".
     std::string upstreamErr = BiquadStageNode::UpstreamErrorFor(inPin("in"));
     if (!upstreamErr.empty()) {
       ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "Upstream: %s",
@@ -126,9 +124,7 @@ void CodeGenNode::draw() {
     return;
   }
 
-  // InputTextMultiline needs a mutable buffer even in read-only mode.
-  // Hand it `code.data()` directly; the buffer size is fixed by the
-  // ReadOnly flag.
+  // InputTextMultiline needs a mutable buffer even read-only.
   ImGui::InputTextMultiline("##code", code.data(), code.size() + 1,
                             ImVec2{kItemWidth, 200.0f},
                             ImGuiInputTextFlags_ReadOnly);

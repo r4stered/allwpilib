@@ -24,18 +24,10 @@ Graph::Graph()
 Graph::~Graph() = default;
 
 void Graph::ConfigureEditor() {
-  // Grid zoom is on, but the wheel is hover-routed in Update(): if the
-  // cursor is over a node, the wheel is suppressed at the editor level so
-  // it reaches the node's embedded ImPlot (or other wheel-aware widget)
-  // exclusively. Empty canvas → grid zoom. Over a plot → plot zoom.
-  // Zoom != 1.0 resamples the draw list, so text/plot strokes get slightly
-  // blurry off scale 1. Bound the zoom range narrowly enough that the
-  // effect stays acceptable, and rely on the R-key reset for snapping back.
-  //
-  // Pan is remapped to left-mouse so trackpad users (no middle button) can
-  // navigate the canvas. The collision with node-drag / link-drag-out is
-  // resolved per-frame in Update() by toggling cfg.block_scroll based on
-  // selection and drag state.
+  // Zoom != 1.0 resamples the draw list, so strokes blur off scale 1; keep the
+  // range narrow enough for that to stay acceptable. Pan is on left-mouse so
+  // trackpad users can navigate; Update() resolves the collision with
+  // node-drag and link-drag-out per frame.
   auto& cfg = m_editor->getGrid().config();
   cfg.zoom_enabled = true;
   cfg.zoom_min = 0.5f;
@@ -44,43 +36,28 @@ void Graph::ConfigureEditor() {
 }
 
 void Graph::Update() {
-  // Recompute the cycle banner before ImNodeFlow drives sink draw()s. Sinks
-  // read m_cycleError to decide whether to skip their getInVal pulls. Doing
-  // this *before* update() means the banner reflects the topology as it is
-  // entering the frame; any links the user adds during draw() (drop-link
-  // popups, etc.) get caught on the next frame.
+  // Before ImNodeFlow drives the sink draw()s, which read m_cycleError to
+  // decide whether to skip their getInVal pulls. Links the user adds during
+  // draw() are caught on the next frame.
   RecomputeCycleError();
 #ifndef RUNNING_FILTERDESIGNER_TESTS
   ApplyTheme();
-  // Hover-aware wheel routing. ImNodeFlow's grid-zoom check reads
-  // ImGui::GetIO().MouseWheel from the *outer* context after the sub-
-  // context's frame has ended; ImPlot inside nodes reads its events from
-  // the sub-context's queue, which is populated from the outer's
-  // InputEventsTrail at sub-context begin(). Zeroing the outer's
-  // MouseWheel here suppresses the grid zoom for this frame without
-  // affecting the events already (about to be) copied into the sub-
-  // context, so an ImPlot widget inside a hovered node still receives
-  // the wheel and zooms its own axes.
-  //
-  // Node rects are stable across the begin→draw→end sequence, so we can
-  // ask each node for its hover state from the outer context before
-  // entering the sub-context.
+  // Hover-aware wheel routing. ImNodeFlow's grid-zoom check reads MouseWheel
+  // from the outer context after the sub-context's frame has ended, while
+  // ImPlot inside a node reads the sub-context's queue, copied from the outer
+  // InputEventsTrail at begin(). Zeroing it here suppresses grid zoom for the
+  // frame without touching the events the sub-context is about to receive.
   if (IsAnyNodeHovered()) {
     ImGuiIO& io = ImGui::GetIO();
     io.MouseWheel = 0.0f;
     io.MouseWheelH = 0.0f;
   }
 
-  // Left-click pan only when the user isn't otherwise engaged with the
-  // graph. Without this gate, the same MouseDelta that drives a node drag
-  // or a link drag-out also pans the canvas — nodes move at 2x cursor
-  // speed and link drag-outs leave a visible trail. We read selection /
-  // drag state from the previous frame (set during the prior update());
-  // node drag and link drag-out both raise their respective flags on the
-  // click frame before the scroll check runs in m_context.end(), but since
-  // ImGui::IsMouseDragging needs at least one frame of movement past the
-  // threshold, a single-frame lag in the gate is harmless: by the time
-  // the drag actually deltas, the flag is set.
+  // Left-click pan only when the user isn't otherwise engaged: the same
+  // MouseDelta that drives a node drag or a link drag-out would also pan the
+  // canvas, moving nodes at 2x cursor speed. The flags are a frame behind, but
+  // IsMouseDragging needs a frame of movement anyway, so the gate is set by
+  // the time a drag deltas.
   bool block = m_editor->isNodeDragged() || m_editor->isLinkDragging();
   if (!block) {
     for (auto& [uid, node] : m_editor->getNodes()) {
@@ -99,15 +76,10 @@ bool Graph::IsAnyNodeHovered() {
 #ifdef RUNNING_FILTERDESIGNER_TESTS
   return false;
 #else
-  // BaseNode::isHovered() uses grid2screen(m_pos) for its hover rect, which
-  // in the outer context resolves to m_pos + origin + scroll * scale — the
-  // node position itself is not scaled. The drawn rect, however, comes from
-  // sub-context vertices that get multiplied by scale on copy-out, so the
-  // visual rect is at (m_pos + scroll) * scale + origin. The two only agree
-  // at scale 1; off scale the detection rect drifts proportional to m_pos,
-  // which let the wheel reach both the grid and a hovered plot at once and
-  // suppressed the wheel over empty canvas. Recompute the rect ourselves
-  // using the actual scaled transform.
+  // Not BaseNode::isHovered(): its rect is m_pos + origin + scroll * scale,
+  // while the drawn rect comes from sub-context vertices scaled on copy-out,
+  // at (m_pos + scroll) * scale + origin. The two agree only at scale 1, so
+  // recompute the rect with the transform the node is actually drawn with.
   auto& grid = m_editor->getGrid();
   const float scale = grid.scale();
   const ImVec2 origin = grid.origin();
@@ -199,17 +171,11 @@ void Graph::Reset() {
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 
 void Graph::ApplyTheme() {
-  // wpigui ships several themes (Classic / Dark / Light / DeepDark) that
-  // the user can switch from Glass's View menu mid-session. Mirroring the
-  // active ImGui style's colors into ImNodeFlow's grid + per-node style
-  // fields each frame keeps the editor coherent with the rest of the UI
-  // without the user having to relaunch.
+  // Per frame, because the user can switch wpigui's theme from Glass's View
+  // menu mid-session.
   const ImVec4* cols = ImGui::GetStyle().Colors;
 
-  // Grid. Use the host's WindowBg as the canvas color and the Separator
-  // color (subtly visible against any theme) for grid lines, dimmed for
-  // sub-grid. ChildBg can be near-transparent in some themes; WindowBg is
-  // always opaque and is what reads as "the editor's background plane."
+  // WindowBg rather than ChildBg, which is near-transparent in some themes.
   auto& gridStyle = m_editor->getStyle();
   gridStyle.colors.background =
       ImGui::ColorConvertFloat4ToU32(cols[ImGuiCol_WindowBg]);
@@ -219,17 +185,13 @@ void Graph::ApplyTheme() {
   ImVec4 subGridLine = cols[ImGuiCol_Separator];
   subGridLine.w *= 0.18f;
   gridStyle.colors.subGrid = ImGui::ColorConvertFloat4ToU32(subGridLine);
-  // The ChildBg PushStyleColor inside ContainedContext::begin uses
-  // cfg.color directly, so push the themed bg there too.
+  // ContainedContext::begin pushes ChildBg from cfg.color directly.
   m_editor->getGrid().config().color = gridStyle.colors.background;
 
-  // Per-node body bg + border colors. Node styles are shared_ptr-shared
-  // across instances of the same NodeStyle::cyan() etc. — mutating one
-  // mutates all instances of that category, which is what we want.
-  // FrameBg reads as the "input field surface" in every theme, which
-  // matches the visual role of the node body. Border tracks the theme's
-  // Border color; selection border uses the theme's HeaderActive (the
-  // "I have focus" color).
+  // Node styles are shared_ptr-shared across instances of NodeStyle::cyan()
+  // and friends, so mutating one mutates the whole category — which is what
+  // the per-category header colors want. Only the body and borders follow the
+  // theme.
   const ImU32 bodyBg = ImGui::ColorConvertFloat4ToU32(cols[ImGuiCol_FrameBg]);
   const ImU32 border = ImGui::ColorConvertFloat4ToU32(cols[ImGuiCol_Border]);
   const ImU32 borderSel =

@@ -24,20 +24,17 @@ class NodeRegistry;
  * familiar (kind, family, order, cutoffs) parameters and exposes it on two
  * output pins:
  *
- *   - "filter" (const DesignedFilter*) — the **cumulative** cascade through
- *     this stage in the Signal chain. If the @c in (Signal) pin is wired to
- *     another BiquadStageNode, this stage's biquads are appended to that
- *     upstream stage's cumulative cascade. Mirrors how the Signal pass-
- *     through already composes: `Src → A → B → CodeGen` exports A+B.
- *   - "signal" (const Signal*) — the optional input Signal filtered through
- *     just this stage's cascade. The chain composes naturally because each
- *     stage filters its already-filtered input.
+ *   - "filter" (const DesignedFilter*) — the cumulative cascade: this stage's
+ *     biquads appended to those of any BiquadStageNode wired to @c in, so
+ *     `Src → A → B → CodeGen` exports A+B.
+ *   - "signal" (const Signal*) — the input filtered through this stage alone,
+ *     which composes into the same cascade because the input has already been
+ *     filtered upstream.
  *
  * Pin shape: in (const Signal*) → out filter, out signal
  *
- * Pure design state lives in @ref BiquadStageNodeLogic; the cumulative
- * cascade is cached on the node because the walk depends on graph
- * topology, which @c BiquadStageNodeLogic deliberately knows nothing about.
+ * Pure design state lives in @ref BiquadStageNodeLogic; the cumulative cascade
+ * is cached on the node, since the walk depends on graph topology.
  */
 class BiquadStageNode final : public FilterDesignerNode {
  public:
@@ -56,15 +53,11 @@ class BiquadStageNode final : public FilterDesignerNode {
   BiquadStageNodeLogic& Logic() { return *m_logic; }
 
   /**
-   * Returns the cumulative cascade through this stage, walking the @c in
-   * Signal pin upstream and concatenating any BiquadStageNode it finds.
-   * Returns nullptr when this stage's own design is invalid; in that case
-   * @ref CombinedError carries a human-readable reason. Also returns
-   * nullptr (with an error message) on sample-rate mismatch between
-   * upstream and this stage, or if the upstream walk exceeds the cycle-
-   * guard depth. Defense-in-depth: the Graph-level cycle detector usually
-   * stops sinks from pulling before this walk runs, but the depth cap also
-   * covers callers that walk upstream directly.
+   * Returns the cumulative cascade through this stage, walking the @c in pin
+   * upstream and concatenating every BiquadStageNode it finds. Returns nullptr
+   * with a message in @ref CombinedError when this stage's design is invalid,
+   * when the upstream sample rate disagrees with it, or when the walk exceeds
+   * the cycle-guard depth.
    *
    * Pointer is stable across calls; only contents change.
    */
@@ -74,12 +67,9 @@ class BiquadStageNode final : public FilterDesignerNode {
   const std::string& CombinedError() const { return m_combinedError; }
 
   /**
-   * Returns the upstream BiquadStageNode's @ref CombinedError when @p inPin
-   * is wired to one and that node is in an error state, otherwise empty.
-   * Sink nodes (CodeGen, Export, Bode, PoleZero) call this when their input
-   * filter is null to distinguish "no input wired" from "input wired but the
-   * upstream cascade errored" — without it the sinks would render the
-   * same misleading "Connect a Filter…" placeholder in both cases.
+   * Returns the upstream BiquadStageNode's @ref CombinedError when @p inPin is
+   * wired to one in an error state, otherwise empty. Sinks call this on a null
+   * input filter to tell "nothing wired" from "wired, but the cascade errored".
    */
   static std::string UpstreamErrorFor(ImFlow::Pin* inPin);
 

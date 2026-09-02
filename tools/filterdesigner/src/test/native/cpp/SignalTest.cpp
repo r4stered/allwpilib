@@ -63,9 +63,8 @@ TEST_CASE("SignalTest InferSampleRateZeroForNonPositivePeriod",
 
 // --- ResampleToGrid -------------------------------------------------------
 //
-// Real logs are never exactly uniform: timestamps jitter by a few percent of
-// the period and samples drop out entirely. These cases pin down what the
-// loaders' resampling does to each of those shapes.
+// Real logs jitter by a few percent of the period and drop samples outright;
+// these cases pin down what resampling does to each of those shapes.
 
 /** Builds a signal whose values are their own sample index. */
 Signal Ramp(std::vector<double> timestamps) {
@@ -105,12 +104,9 @@ TEST_CASE("SignalTest ResampleToGridLeavesExactGridUntouched",
 
 TEST_CASE("SignalTest ResampleToGridInterpolatesJitteredTimestamps",
           "[filterdesigner]") {
-  // 1 kHz with every tenth sample logged 0.3 of a period late. Only 18 of the
-  // 99 diffs are off, so the median period is still exactly 1 ms.
-  //
-  // Values are a straight line in time, which interpolation must reproduce
-  // exactly: a sample taken late carries the value the signal had when it was
-  // taken, and reading the interpolant back at the slot time undoes that.
+  // 1 kHz with every tenth sample logged 0.3 of a period late; only 18 of the
+  // 99 diffs are off, so the median period is still exactly 1 ms. The values
+  // are a straight line in time, which interpolation must reproduce exactly.
   std::vector<double> ts;
   for (int i = 0; i < 100; ++i) {
     ts.push_back(i * 0.001 + (i > 0 && i % 10 == 0 ? 0.0003 : 0.0));
@@ -185,14 +181,10 @@ TEST_CASE("SignalTest ResampleToGridKeepsSamplesSharingASlot",
 
 TEST_CASE("SignalTest ResampleToGridJitterSurvivesAccumulatedDrift",
           "[filterdesigner]") {
-  // The regression this metric exists for. Intervals are spread evenly over
-  // +/- 0.2 of a period in 21 steps, so the median interval is exactly the
-  // period and the median interval error is 0.10.
-  //
-  // Those errors accumulate: a timestamp's distance from the grid is their
-  // running sum, and here it walks past half a period. Measuring that
-  // distance instead reports near 0.5 for timing that is only 10% off. The
-  // two CHECKs below are the same signal seen both ways.
+  // Intervals spread evenly over +/- 0.2 of a period in 21 steps: the median
+  // interval is exactly the period and the median interval error is 0.10.
+  // Those errors accumulate, so a timestamp's distance from the grid walks
+  // past half a period — the two CHECKs are the same signal seen both ways.
   std::vector<double> ts{0.0};
   for (int i = 0; i < 210; ++i) {
     ts.push_back(ts.back() + 0.001 * (1.0 + 0.02 * ((i % 21) - 10)));
@@ -288,10 +280,9 @@ TEST_CASE("SignalTest ResampleToGridPreservesTimeOrigin", "[filterdesigner]") {
 
 // --- End trimming ---------------------------------------------------------
 //
-// A topic published once when NetworkTables connects and then not again until
-// the robot is enabled leaves a single sample minutes ahead of the record it
-// belongs to. Anchoring the grid there makes the whole enabled period a
-// rounding error on an axis of mostly nothing.
+// A topic published once as NetworkTables connects and then not again until
+// the robot is enabled leaves one sample minutes ahead of its record;
+// anchoring the grid there spends it all on nothing.
 
 TEST_CASE("SignalTest ResampleToGridTrimsIsolatedLeadingSample",
           "[filterdesigner]") {
@@ -411,12 +402,9 @@ TEST_CASE("SignalTest ResampleToGridTrimIsIdempotent", "[filterdesigner]") {
 }
 
 TEST_CASE("SignalTest ResampleToGridRefusesOversizedGrid", "[filterdesigner]") {
-  // Two bursts at 1 kHz a 10-day gap apart. Filling that grid would need
-  // ~10^9 slots, so the signal is left alone and flagged off-grid.
-  //
-  // The gap has to be interior to reach this path: at either end the trim
-  // takes the outlying samples off the grid instead, which is the whole point
-  // of it — a lone sample a long way from the rest is not a memory problem.
+  // Two bursts at 1 kHz a 10-day gap apart: filling that grid would need ~10^9
+  // slots, so the signal is left alone and flagged off-grid. The gap has to be
+  // interior — at either end the trim takes the outlying samples off first.
   Signal s = Ramp({0.0, 0.001, 0.002, 1.0e6, 1.0e6 + 0.001, 1.0e6 + 0.002});
   s.ResampleToGrid();
 
@@ -489,11 +477,9 @@ TEST_CASE("SignalTest ResampleToGridLeavesASnappedSignalsDataAlone",
 
 // --- FindSegments / Window ------------------------------------------------
 //
-// A match log is not one recording but dozens: a topic publishes while the
-// robot is enabled, goes quiet for minutes and resumes. ResampleToGrid has
-// only one grid, so it interpolates straight across those holes; segments say
-// where the recordings are, and Window is how the caller analyzes one of them
-// instead of the whole reconstruction.
+// A match log is not one recording but dozens, and ResampleToGrid has only one
+// grid to interpolate across the holes between them. Segments say where the
+// recordings are; Window analyzes one instead of the reconstruction.
 
 /** 100 Hz timestamps: @p counts samples per segment, @p gaps seconds between
  * them. */
@@ -600,8 +586,8 @@ TEST_CASE("SignalTest WindowOfOneSegmentDropsTheGapFill", "[filterdesigner]") {
   UNSCOPED_INFO("the whole record is nearly all interpolant across the pause");
   CHECK(whole.quality.filled > 0.9);
 
-  // The point of the ticket: the same data, analyzed one segment at a time,
-  // is measurement rather than reconstruction.
+  // The same data, analyzed one segment at a time, is measurement rather
+  // than reconstruction.
   Signal second = raw.Window(segments[1].Range());
   CHECK(second.quality.onGrid);
   CHECK(second.values.size() == 20u);

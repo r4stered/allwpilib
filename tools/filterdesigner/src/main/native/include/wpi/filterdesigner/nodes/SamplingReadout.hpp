@@ -16,11 +16,10 @@ namespace wpi::filterdesigner {
  * Renders a source node's one-line sampling readout, e.g.
  * "248 Hz, 0.2% filled, longest gap 24.0 ms".
  *
- * Both source nodes resample onto a uniform grid rather than rejecting
- * nonuniform data, which means a signal can look perfectly plottable while
- * being mostly interpolant across a disabled period. This is the only place
- * the user finds out, so the line escalates from muted grey to amber to red
- * as the reconstruction takes over — see @ref ClassifySampling.
+ * The loaders resample rather than reject, so a signal can look plottable
+ * while being mostly interpolant across a disabled period. This line is where
+ * the user finds out, escalating grey to amber to red as the reconstruction
+ * takes over — see @ref ClassifySampling.
  */
 inline void DrawSamplingReadout(const Signal& signal) {
   const std::string text = DescribeSampling(signal);

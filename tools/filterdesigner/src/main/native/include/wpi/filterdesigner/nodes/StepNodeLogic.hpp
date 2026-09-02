@@ -37,10 +37,9 @@ class StepNodeLogic {
   int startSample = 0;
 
   /**
-   * Returns a stable pointer to the cached Signal, rebuilding if @ref
-   * sampleRate / @ref length / @ref startSample have changed since the last
-   * call. Returns nullptr if the parameters are invalid (non-positive sample
-   * rate or length below @ref kMinLength).
+   * Returns a pointer to the cached Signal, rebuilding it when any parameter
+   * has changed. Returns nullptr for a non-positive rate or a length below
+   * @ref kMinLength.
    */
   const wpi::filterdesigner::Signal* Signal() const;
 

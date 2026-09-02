@@ -19,11 +19,9 @@ namespace wpi::filterdesigner {
  * settings, the currently subscribed topic name, ring-buffer config, and the
  * @ref NT4Source whose @ref Signal pointer the node's output pin exposes.
  *
- * The actual NT subscription (instance, listener, subscriber) is owned by
- * @ref NT4SourceNode; this class only knows how to consume samples that were
- * already drained out of NetworkTables. Tests can construct + drive a
- * NT4SourceNodeLogic without spinning up ntcore by supplying a stub drain
- * callable via @ref SetDrain.
+ * @ref NT4SourceNode owns the subscription itself; this class only consumes
+ * samples already drained out of NetworkTables, so a stub @ref SetDrain drives
+ * it without ntcore.
  */
 class NT4SourceNodeLogic {
  public:
@@ -34,24 +32,19 @@ class NT4SourceNodeLogic {
   NT4SourceNodeLogic(const NT4SourceNodeLogic&) = delete;
   NT4SourceNodeLogic& operator=(const NT4SourceNodeLogic&) = delete;
 
-  /**
-   * Inject the function that yields fresh samples each frame. The Node sets
-   * this once in its ctor with a lambda that reads from the NT subscriber.
-   * Tests inject one-shot stubs.
-   */
+  /** Installs the function that yields fresh samples each frame. */
   void SetDrain(NT4Source::DrainFn fn);
 
   /**
-   * Pull new samples, append + trim the ring buffer, rebuild the cached
-   * Signal. Intended to be called once per ImGui frame. Safe to call with no
-   * drain set — does nothing in that case.
+   * Pulls new samples, trims the ring buffer and rebuilds the cached Signal.
+   * Called once per frame; a no-op with no drain set.
    */
   void Update();
 
   /**
-   * Returns the cached Signal pointer when there is at least one sample
-   * buffered, otherwise nullptr. Pointer is stable for the logic's lifetime;
-   * the vectors inside are rewritten by @ref Update.
+   * The cached Signal once at least one sample is buffered, else nullptr. The
+   * pointer is stable for the logic's lifetime; @ref Update rewrites what it
+   * points at.
    */
   const wpi::filterdesigner::Signal* Signal() const;
 
@@ -69,10 +62,8 @@ class NT4SourceNodeLogic {
   const std::string& TopicName() const { return m_topicName; }
 
   /**
-   * Update the topic name. Also propagates onto the underlying NT4Source so
-   * the produced Signal's @c name field tracks the topic identity. Does not
-   * touch the ring buffer — the Node calls Clear() separately when it
-   * actually re-subscribes.
+   * Sets the topic name, and with it the produced Signal's name. Leaves the
+   * ring buffer alone; the node calls @ref Clear when it re-subscribes.
    */
   void SetTopicName(std::string_view name);
 
@@ -83,10 +74,9 @@ class NT4SourceNodeLogic {
   void SetBufferSeconds(double seconds) { m_source.SetBufferSeconds(seconds); }
 
   /**
-   * Marks the subscribed topic as discrete, so the grid holds its values
-   * rather than interpolating between them. Set by the Node from the topic
-   * type; @ref Clear leaves it alone, since it describes the topic and not
-   * the samples.
+   * Marks the topic as discrete, so the grid holds its values rather than
+   * interpolating. @ref Clear leaves it alone: it describes the topic, not the
+   * samples.
    */
   bool Discrete() const { return m_source.Discrete(); }
   void SetDiscrete(bool discrete) { m_source.SetDiscrete(discrete); }
@@ -103,10 +93,9 @@ class NT4SourceNodeLogic {
 
   static int SanitizeTeam(int t) { return t < 0 ? 0 : t; }
   /**
-   * Clamps @p p to a valid TCP port. Values <= 0 fall back to the ntcore
-   * default port (a hand-edited file with `port: 0` shouldn't poison the
-   * connect dialog); values > 65535 are capped to 65535 since ntcore casts
-   * to `unsigned int` and would happily accept nonsense otherwise.
+   * Clamps @p p to a valid TCP port: non-positive falls back to the ntcore
+   * default, anything past 65535 caps there. ntcore itself casts to unsigned
+   * and would accept nonsense.
    */
   static int SanitizePort(int p) {
     if (p < 1) {

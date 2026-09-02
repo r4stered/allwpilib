@@ -7,18 +7,16 @@
 namespace wpi::filterdesigner {
 
 /**
- * Pure (UI-free) configuration for a PoleZeroPlotNode. Poles + zeros are
- * recomputed per-frame from the connected Filter wires via @ref
- * ComputePolesZeros; this struct only holds persisted display options.
+ * Persisted display options for a PoleZeroPlotNode. The roots themselves are
+ * recomputed per frame from the connected Filter wires.
  */
 struct PoleZeroPlotNodeLogic {
   /** If true (default) the legend overlay is shown. */
   bool showLegend = true;
 
   /**
-   * Plot canvas size in screen pixels. The plot uses an equal-aspect view
-   * (1 Re unit == 1 Im unit), so changing width/height changes how much of
-   * the plane is visible without distorting the unit circle.
+   * Canvas size in pixels. The view is equal-aspect, so this changes how much
+   * of the plane is visible rather than distorting the unit circle.
    */
   float plotWidth = 360.0f;
   float plotHeight = 360.0f;

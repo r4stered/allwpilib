@@ -304,10 +304,9 @@ TEST_CASE_METHOD(WpiLogSourceTest,
 TEST_CASE_METHOD(WpiLogSourceTest,
                  "WpiLogSourceTest LoadEntryResamplesOntoUniformGrid",
                  "[filterdesigner]") {
-  // What a real log actually looks like: nominally 1 kHz, timestamps off by
-  // up to a fifth of a period, and the sample at 6 ms never logged. The
-  // loader hands downstream a uniform grid so the fixed-dt assumption in the
-  // FFT and the biquad stages is true rather than merely assumed.
+  // What a real log looks like: nominally 1 kHz, timestamps off by up to a
+  // fifth of a period, and the sample at 6 ms never logged. The loader still
+  // hands downstream a uniform grid.
   wpi::log::DoubleLogEntry d{log, "jittery", 0};
   // No zero timestamps — Append treats 0 as "now" rather than as t = 0.
   const int64_t nanos[] = {1'000'000, 2'000'000, 3'000'000, 4'200'000,

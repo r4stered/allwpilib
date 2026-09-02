@@ -15,9 +15,8 @@ namespace wpi::filterdesigner {
  * One flat name to file into a @ref NameTreeNode tree — an NT topic, or a
  * wpilog entry.
  *
- * Non-owning: the views are only read during @ref BuildNameTree, which copies
- * whatever it keeps, so they need only outlive that one call and may point
- * straight into the caller's own entry or topic list.
+ * Non-owning: @ref BuildNameTree copies whatever it keeps, so the views need
+ * only outlive that one call.
  */
 struct NameTreeItem {
   /** Full name, as the source spells it: "NT:/Spindexer/VelocityRPM". */
@@ -54,20 +53,16 @@ struct NameTreeNode {
 
 /**
  * Files every item in @p items into a tree, splitting each name on '/' — and,
- * before that, on a leading "prefix:" if the prefix contains no '/'. That
- * second rule is what puts `NT:/Spindexer/VelocityRPM` under `NT` /
- * `Spindexer` / `VelocityRPM` rather than leaving the whole `NT:/Spindexer`
- * mouthful as one segment; the guard is what stops it mangling a name whose
- * colon is inside a path segment, like `/Shooter/ratio:1`. Both come from
- * datalogtool's exporter, which files the same wpilog entries.
+ * before that, on a leading "prefix:" whose prefix holds no '/', which files
+ * `NT:/Spindexer/VelocityRPM` under `NT` / `Spindexer` / `VelocityRPM` while
+ * leaving `/Shooter/ratio:1` alone. Both rules come from datalogtool's
+ * exporter, which files the same wpilog entries.
  *
- * Empty segments are dropped, so a leading '/' does not produce an unnamed
- * root child, and a name that splits to nothing at all ("/", "") is skipped.
- * Children are sorted by name at every level, so an unsorted input list — a
- * wpilog's entries arrive in log order — still renders alphabetically.
+ * Empty segments are dropped and a name that splits to nothing is skipped.
+ * Children are sorted by name at every level, so a wpilog's log-order entry
+ * list still renders alphabetically.
  *
- * The returned root is a container: it holds children but never names an item
- * itself. Callers render @c root.children, not the root.
+ * The returned root is a container: callers render @c root.children.
  */
 NameTreeNode BuildNameTree(std::span<const NameTreeItem> items);
 
@@ -76,10 +71,8 @@ NameTreeNode BuildNameTree(std::span<const NameTreeItem> items);
  * @p search, case-insensitively. An empty @p search always matches, so the
  * unfiltered tree shows everything.
  *
- * Matching on the full path rather than the segment is what lets a query name
- * a parent ("spindexer") and still surface the leaves beneath it; a branch
- * survives exactly when something under it does, which is what keeps a
- * filtered tree navigable instead of hollow.
+ * The full path rather than the segment, so a query naming a parent
+ * ("spindexer") still surfaces the leaves beneath it.
  */
 bool NameTreeNodeMatchesSearch(const NameTreeNode& node,
                                std::string_view search);

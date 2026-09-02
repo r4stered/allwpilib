@@ -30,16 +30,14 @@ class NodeRegistry;
 /**
  * Source node that subscribes to a numeric NetworkTables 4 topic and exposes
  * a rolling window of recent samples on its "out" pin as a
- * @c const Signal*. The actual NT subscription is owned by this class; pure
- * config + ring-buffer state live in @ref NT4SourceNodeLogic so that
- * round-trip and validation tests can run without ntcore involvement.
+ * @c const Signal*. This class owns the NT subscription; config and
+ * ring-buffer state live in @ref NT4SourceNodeLogic so tests can run without
+ * ntcore.
  *
  * Pin shape: — → out (const Signal*)
  *
- * The connection is lazy: the wrapped @c NetworkTableInstance is only
- * created when the user clicks Connect, so simply constructing the node
- * (e.g. on graph load before the user reconnects, or in a unit test) does
- * not allocate ntcore state.
+ * The wrapped @c NetworkTableInstance is created on the first Connect, so
+ * constructing the node allocates no ntcore state.
  */
 class NT4SourceNode final : public FilterDesignerNode {
  public:
@@ -57,12 +55,7 @@ class NT4SourceNode final : public FilterDesignerNode {
   const NT4SourceNodeLogic& Logic() const { return *m_logic; }
   NT4SourceNodeLogic& Logic() { return *m_logic; }
 
-  /**
-   * True if the wrapped @c NetworkTableInstance has been allocated. Stays
-   * false from construction through the first Connect click; tests rely on
-   * this to assert the lazy-allocation contract (so test fixtures that
-   * just construct the node don't leak ntcore handles).
-   */
+  /** True once the wrapped @c NetworkTableInstance has been allocated. */
   bool IsInstanceCreated() const { return static_cast<bool>(m_inst); }
 
  private:

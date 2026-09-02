@@ -28,11 +28,9 @@ class NodeRegistry;
  *
  * Pin shape: — → out (const Signal*)
  *
- * Pure state lives in @ref WpiLogSourceNodeLogic; this class is just the
- * ImNodeFlow + ImGui shell. The one piece of state that lives here is the
- * in-flight marker drag: the window is committed to the logic on mouse
- * release rather than per frame, because each commit re-slices and resamples
- * the entry and bumps the revision every downstream cache keys on.
+ * Pure state lives in @ref WpiLogSourceNodeLogic; this class is the ImNodeFlow
+ * and ImGui shell, plus the in-flight marker drag, which commits to the logic
+ * on mouse release rather than per frame.
  */
 class WpiLogSourceNode final : public FilterDesignerNode {
  public:
@@ -82,9 +80,8 @@ class WpiLogSourceNode final : public FilterDesignerNode {
    * view somewhere the new data isn't. */
   TimeRange m_fittedSpan;
   /** Width of everything the node drew last frame. The timeline stretches to
-   * it, which is the only way to fill a node whose width is decided by its
-   * widest row and so is not known until after @ref draw returns. Settles in
-   * two frames: the strip can only ever match the widest row, never widen
+   * it, a node's width not being known until after @ref draw returns. It
+   * settles in two frames: the strip matches the widest row, never widens
    * past it. */
   float m_contentWidth = 0.0f;
 };

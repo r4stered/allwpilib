@@ -57,11 +57,9 @@ GraphEditor::GraphEditor(std::string_view saveDir)
   m_creationPopup = std::make_unique<CreationPopup>(*m_graph, *m_registry);
   m_creationPopup->Attach();
 
-  // Graph::Reset rebuilds the underlying ImNodeFlow instance, which throws
-  // away the popup's right-click + drop-link callbacks. Register a re-attach
-  // hook so the rebind happens atomically with the reset (load path,
-  // future programmatic resets, etc.) instead of relying on every caller
-  // remembering to re-Attach by hand.
+  // Graph::Reset rebuilds the underlying ImNodeFlow instance, throwing away
+  // the popup's callbacks; re-attach with the reset rather than leaving every
+  // caller to remember it.
   m_graph->SetOnReset([this] { m_creationPopup->Attach(); });
 }
 

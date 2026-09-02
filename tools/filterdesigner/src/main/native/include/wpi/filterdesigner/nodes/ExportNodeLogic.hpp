@@ -14,11 +14,10 @@ namespace wpi::filterdesigner {
 struct DesignedFilter;
 
 /**
- * Pure (UI-free) state of an @c ExportNode: target language, identifier for
- * the generated class/function, and the WPILib robot project root the
- * generated file is written under. Holds the last @ref ExportFilter result
- * (status + message) so the node can render it without re-running the
- * export.
+ * Pure (UI-free) state of an @c ExportNode: target language, identifier for the
+ * generated class or function, and the robot project root it is written under.
+ * Keeps the last @ref ExportFilter result so the node can render it without
+ * re-running the export.
  */
 class ExportNodeLogic {
  public:
@@ -37,11 +36,9 @@ class ExportNodeLogic {
   std::string projectRoot;
 
   /**
-   * Runs @ref ExportFilter for @p filter using the current parameters and
-   * caches the result message on @ref lastMessage / @ref lastOk. Returns
-   * @c false (and sets a "no filter" message) when @p filter is null or has
-   * no sections. The file comment header gets a best-effort description
-   * derived from the filter (sample rate + section count).
+   * Runs @ref ExportFilter for @p filter with the current parameters, caching
+   * the outcome on @ref lastMessage and @ref lastOk. Returns false, with a
+   * message, when @p filter is null or has no sections.
    */
   bool Export(const DesignedFilter* filter);
 

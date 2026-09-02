@@ -13,10 +13,9 @@ namespace wpi::filterdesigner {
 struct DesignedFilter;
 
 /**
- * Pure (UI-free) configuration for a @c CodeGenNode: target language and
- * variable identifier. The emitted code is recomputed on demand from the
- * connected DesignedFilter via @ref Generate; the node calls it once per
- * frame so the displayed text always matches the upstream cascade.
+ * Persisted configuration for a @c CodeGenNode: target language and variable
+ * identifier. The node re-emits the snippet every frame, so the displayed
+ * text always matches the upstream cascade.
  */
 class CodeGenNodeLogic {
  public:

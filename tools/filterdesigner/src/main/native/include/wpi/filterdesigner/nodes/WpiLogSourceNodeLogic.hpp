@@ -33,16 +33,12 @@ namespace wpi::filterdesigner {
  * selected window of those samples resampled onto its own uniform grid. Every
  * window is cut from the raw copy and resampled once — never from a previous
  * window's grid, which would report the slice as flawless however much of the
- * grid beneath it was interpolant. Holding the raw copy is also what keeps a
- * marker drag off the O(records) log scan @ref WpiLogSource::LoadEntryRaw
- * costs.
+ * grid beneath it was interpolant. Holding the raw copy also keeps a marker
+ * drag off the O(records) log scan @ref WpiLogSource::LoadEntryRaw costs.
  *
- * The window starts as the whole record, so picking an entry publishes what
- * it published before time ranges existed. A real match log's median entry is
- * 40% interpolated at that setting and its longest segment is a third of the
- * span, so narrowing is usually the right move — but it discards more than
- * half the samples, which makes it the user's call. @ref SelectLongestSegment
- * is the one-click version.
+ * The window starts as the whole record. Narrowing usually cuts a lot of
+ * interpolant, but it discards real samples too, which makes it the user's
+ * call; @ref SelectLongestSegment is the one-click version.
  */
 class WpiLogSourceNodeLogic {
  public:
@@ -52,9 +48,8 @@ class WpiLogSourceNodeLogic {
   WpiLogSourceNodeLogic& operator=(const WpiLogSourceNodeLogic&) = delete;
 
   /**
-   * Opens a .wpilog file from disk. On success the entry list becomes
-   * available and any previous selection is cleared; on failure the logic
-   * resets and @ref LoadError carries a user-facing message.
+   * Opens a .wpilog file from disk, clearing any previous selection. On
+   * failure the logic resets and @ref LoadError carries a user-facing message.
    *
    * @return true on success.
    */
@@ -67,9 +62,8 @@ class WpiLogSourceNodeLogic {
   bool OpenBuffer(std::span<const uint8_t> buffer);
 
   /**
-   * Same as @ref OpenFile but for the deserialize path — if the file is
-   * missing the logic ends up in an empty + error state instead of bubbling
-   * up the failure as something the caller has to handle.
+   * @ref OpenFile for the deserialize path: a missing file leaves the logic
+   * empty with an error rather than handing the caller a failure.
    */
   void RestoreFromPath(std::string_view path, std::string_view selectedEntry);
 
@@ -83,15 +77,11 @@ class WpiLogSourceNodeLogic {
   /**
    * Narrows the published window to @p range, clamped to the record.
    *
-   * The window is cut from the raw samples and resampled onto the grid that
-   * window implies, so a selection inside one segment gets a rate and a fill
-   * fraction describing itself rather than the whole record's. The published
-   * @ref Signal is reseated and its revision bumped — see the borrow contract
-   * on @ref Signal.
-   *
-   * Callers driving this from a live drag should commit on release rather
-   * than per frame: every call re-slices, re-resamples and invalidates every
-   * downstream cache keyed on revision.
+   * The window is cut from the raw samples and resampled onto the grid it
+   * implies, so a selection inside one segment gets a rate and a fill fraction
+   * describing itself. The published @ref Signal is reseated and its revision
+   * bumped, so a caller driving this from a drag should commit on release
+   * rather than per frame.
    *
    * @return false, leaving the selection alone, when no entry is picked or
    *         when @p range clamps to nothing (inverted, or entirely outside
@@ -105,12 +95,10 @@ class WpiLogSourceNodeLogic {
 
   /**
    * Narrows the published window to the longest stretch of uninterrupted
-   * logging — longest by wall-clock span, which is what "longest" means on
-   * the node's timeline. Ties go to the earliest.
+   * logging, by wall-clock span; ties go to the earliest.
    *
-   * @return false when the entry has no segments to pick from, i.e. when no
-   *         sample rate could be inferred and there is no period to measure
-   *         gaps against.
+   * @return false when the entry has no segments, i.e. when no sample rate
+   *         could be inferred to measure gaps against.
    */
   bool SelectLongestSegment();
 
@@ -126,12 +114,9 @@ class WpiLogSourceNodeLogic {
   std::span<const Segment> Segments() const { return m_segments; }
 
   /**
-   * The picked entry's samples as logged, before windowing and resampling —
-   * what the node's timeline draws so the user can see where the data is.
-   * nullptr when nothing is picked.
-   *
-   * Reseated by the same mutators as @ref Signal and under the same
-   * single-frame borrow contract.
+   * The picked entry's samples as logged, which the node's timeline draws;
+   * nullptr when nothing is picked. Reseated by the same mutators as
+   * @ref Signal, under the same borrow contract.
    */
   const wpi::filterdesigner::Signal* RawSignal() const {
     return m_rawSignal.has_value() ? &*m_rawSignal : nullptr;
@@ -156,17 +141,11 @@ class WpiLogSourceNodeLogic {
    * Pointer to the loaded signal, or nullptr if nothing is selected.
    *
    * **Single-frame borrow contract.** The pointer is only valid until the
-   * next mutator on this logic — @ref OpenFile / @ref OpenBuffer /
-   * @ref SelectEntry / @ref RestoreFromPath / @ref Reset and the three
-   * window setters all reseat the
-   * underlying @c std::optional<Signal> in place, which destroys the old
-   * @c Signal and frees its `values` / `timestamps` buffers. Downstream
-   * sinks that pull this pointer through an ImNodeFlow OutPin must consume
-   * it within the same frame and must not cache it across frames; the
-   * `Signal::revision` field is the cache key intended for "did this
-   * underlying data change" tracking. Sources that need cross-frame
-   * pointer stability for downstream caching would need a heap-allocated
-   * Signal owned by the logic instead.
+   * next mutator on this logic — every one of them reseats the underlying
+   * @c std::optional<Signal> in place, destroying the old one. Sinks pulling
+   * this through an ImNodeFlow OutPin must consume it within the frame and
+   * must not cache it; `Signal::revision` is the cache key for "did the
+   * underlying data change".
    */
   const wpi::filterdesigner::Signal* Signal() const {
     return m_selectedSignal.has_value() ? &*m_selectedSignal : nullptr;
@@ -177,12 +156,8 @@ class WpiLogSourceNodeLogic {
 
   /**
    * The same entries filed into a path-split tree for the node's picker, with
-   * non-numeric entries marked not selectable. Rebuilt once per opened log,
-   * not per frame — a real match log has hundreds of entries and the node
-   * draws every frame.
-   *
-   * The root is a container and never names an entry; render its children.
-   * Empty when no log is open.
+   * non-numeric entries marked not selectable. Rebuilt per opened log, not per
+   * frame. The root is a container; render its children.
    */
   const NameTreeNode& EntryTree() const { return m_entryTree; }
 
@@ -195,10 +170,8 @@ class WpiLogSourceNodeLogic {
   void Republish();
 
   /**
-   * Installs @p source as the open log and rebuilds everything derived from
-   * it — the entry tree, and the (now meaningless) selection. The only place
-   * @ref m_source is written, so a picker can never outlive the log it was
-   * built from.
+   * Installs @p source and rebuilds everything derived from it. The only place
+   * @ref m_source is written, so a picker can never outlive its log.
    */
   void SetSource(std::optional<WpiLogSource> source);
 

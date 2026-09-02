@@ -16,10 +16,9 @@ namespace wpi::filterdesigner {
  * @c [1, 0, 0, ...] of @ref length samples at @ref sampleRate Hz. Exposes
  * a stable Signal pointer for ImNodeFlow's pull model.
  *
- * UI mutates @ref sampleRate / @ref length in place; @ref Signal is lazy and
- * rebuilds when either changes. The cached @c Signal bumps its @c revision
- * on every rebuild so downstream caches (BiquadStage's filtered-signal
- * cache) see the new content.
+ * The UI mutates @ref sampleRate and @ref length in place; @ref Signal rebuilds
+ * lazily when either changes, bumping the signal's revision so downstream
+ * caches see the new content.
  */
 class ImpulseNodeLogic {
  public:
@@ -35,12 +34,9 @@ class ImpulseNodeLogic {
   int length = 200;
 
   /**
-   * Returns a stable pointer to the cached Signal, rebuilding if @ref
-   * sampleRate / @ref length have changed since the last call. Returns
-   * nullptr if the parameters are invalid (non-positive sample rate or
-   * length below @ref kMinLength).
-   *
-   * Lifetime: pointer is valid until the next call that triggers a rebuild.
+   * Returns a pointer to the cached Signal, rebuilding it when @ref sampleRate
+   * or @ref length have changed and invalidating the previous pointer. Returns
+   * nullptr for a non-positive rate or a length below @ref kMinLength.
    */
   const wpi::filterdesigner::Signal* Signal() const;
 

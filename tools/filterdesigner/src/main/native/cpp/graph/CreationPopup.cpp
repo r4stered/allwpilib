@@ -25,11 +25,7 @@ namespace {
 
 constexpr const char* kExternalPopupId = "##fd_creation_external";
 
-/**
- * Returns the list of pin types that would let a newly-created node accept
- * @p draggedPin. If the dragged pin is an output, we need a matching input
- * type on the candidate node; if it's an input, we need a matching output.
- */
+/** Pin types on a candidate node that could accept a pin of @p draggedType. */
 const std::vector<std::type_index>& AcceptablePinTypes(
     const NodeRegistry::Entry& entry, ImFlow::PinType draggedType) {
   return draggedType == ImFlow::PinType_Output ? entry.inputTypes
@@ -45,11 +41,7 @@ bool MatchesFilter(const NodeRegistry::Entry& entry, ImFlow::Pin* draggedPin) {
   return std::find(pool.begin(), pool.end(), draggedType) != pool.end();
 }
 
-/**
- * After creating a node, find a pin on the new node that matches the dragged
- * pin's type, and link them. Picks the first compatible pin — sufficient for
- * single-output sources + sinks with one matching input.
- */
+/** Links @p draggedPin to the first pin on @p node that matches its type. */
 void AutoLink(FilterDesignerNode& node, ImFlow::Pin* draggedPin) {
   if (!draggedPin) {
     return;
@@ -80,8 +72,7 @@ void CreationPopup::Attach() {
 
   editor.rightClickPopUpContent([this](ImFlow::BaseNode* hovered) {
     if (hovered) {
-      // Reserved for a future per-node popup (rename/delete/etc.).
-      // Right-click on a node currently falls through.
+      // Right-click on a node has no menu of its own yet.
       return;
     }
     ImVec2 gridPos = m_graph->Editor().screen2grid(ImGui::GetMousePos());
@@ -130,7 +121,6 @@ bool CreationPopup::DrawMenuItems(const ImVec2& gridPos,
 
   bool created = false;
   for (const std::string& category : categoryOrder) {
-    // Filtered visible entries in this category for the current dragged pin.
     std::vector<const NodeRegistry::Entry*> visible;
     for (const auto& entry : m_registry->All()) {
       if (entry.menuCategory != category) {

@@ -141,9 +141,8 @@ TEST_CASE("BiquadStageNodeLogicTest FilteredRepeatPullReturnsConsistentResult",
   const Signal* first = logic.Filtered(&in);
   REQUIRE(first != nullptr);
   std::vector<double> firstValues = first->values;
-  // Cache hit path: same pointer, same revision. Output values must match
-  // (this also exercises the cache-hit fast path — the optional<Signal>
-  // address is stable either way so we can't assert that directly).
+  // Same pointer, same revision: a cache hit. The optional<Signal> address is
+  // stable either way, so the values are what can be asserted on.
   const Signal* second = logic.Filtered(&in);
   REQUIRE(second != nullptr);
   CHECK(second->values == firstValues);

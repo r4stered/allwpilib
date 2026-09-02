@@ -9,12 +9,9 @@
 namespace wpi::filterdesigner {
 
 /**
- * The "Filter" wire type. A designed biquad cascade plus the sample rate it
- * was designed at — bundling sampleRate with the sections means downstream
- * sinks (Bode plot, code-gen, future filter-merge nodes) don't need a
- * parallel fs field and can't disagree with the producing stage.
- *
- * Sources own; sinks borrow by pointer. Same lifetime contract as Signal.
+ * The "Filter" wire type: a designed biquad cascade plus the sample rate it
+ * was designed at, so a sink cannot disagree with the producing stage about
+ * fs. Sources own; sinks borrow by pointer, as with Signal.
  */
 struct DesignedFilter {
   Sections sections;

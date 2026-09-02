@@ -109,10 +109,9 @@ bool WpiLogSourceNodeLogic::SelectEntry(std::string_view name) {
     m_loadError = "No log loaded";
     return false;
   }
-  // Raw, because every window has to be cut from the samples as logged: a
-  // window of an already-gridded signal would measure the first pass's
-  // interpolant as if it were data. This is also the only scan of the log the
-  // entry costs — dragging the timeline afterwards re-cuts this copy.
+  // Raw, because every window is cut from the samples as logged. This is also
+  // the only scan of the log an entry costs — dragging the timeline
+  // afterwards re-cuts this copy.
   auto sig = m_source->LoadEntryRaw(name);
   if (!sig) {
     m_loadError = "Failed to load entry: " + std::string{name};
@@ -123,10 +122,8 @@ bool WpiLogSourceNodeLogic::SelectEntry(std::string_view name) {
   m_segments =
       Signal::FindSegments(m_rawSignal->timestamps,
                            Signal::InferSampleRate(m_rawSignal->timestamps));
-  // The whole record, so that picking an entry publishes what it published
-  // before there were windows. Narrowing to the longest segment usually helps
-  // the spectrum a great deal and drops most of the samples doing it, which is
-  // why it is a button and not what happens here.
+  // The whole record: narrowing drops real samples, so it stays a button
+  // rather than something picking an entry does on its own.
   m_range = FullRange();
   Republish();
   m_loadError.clear();

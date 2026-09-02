@@ -163,11 +163,8 @@ TEST_CASE("BiquadStageNodeSerializeTest SignalPassthroughLinkRoundTrips",
 TEST_CASE(
     "BiquadStageNodeSerializeTest MultiStageSignalPassThroughActuallyFilters",
     "[filterdesigner]") {
-  // Two BiquadStages chained on the Signal pass-through. Drive a synthetic
-  // input through stage A's Filtered(), then through stage B's Filtered()
-  // and verify both stages produce a same-length output that isn't a copy
-  // of the prior step. Complements the link-topology test above with a
-  // through-the-math check on chained Filtered() calls.
+  // Two stages chained on the Signal pass-through: each Filtered() keeps the
+  // length and changes the values.
   using wpi::filterdesigner::BiquadStageNodeLogic;
   using wpi::filterdesigner::Signal;
 

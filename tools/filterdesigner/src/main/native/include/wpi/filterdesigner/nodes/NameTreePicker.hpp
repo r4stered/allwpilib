@@ -25,8 +25,8 @@ namespace detail {
  *                     skipped entirely.
  * @param selected     Full path of the currently picked item, so its row can
  *                     be highlighted and focused when the popup opens.
- * @param forceOpen    Branches default to open, which is how a filtered tree
- *                     shows its matches without further clicks.
+ * @param forceOpen    Branches default to open, so a filtered tree shows its
+ *                     matches without further clicks.
  * @param onSelect     Called with the full path of a selectable item's row
  *                     when it is clicked.
  */
@@ -75,9 +75,8 @@ void RenderNameTreeNode(const NameTreeNode& node, std::string_view search,
 /**
  * Draws a search box and a path-split tree of @p root's children — the body of
  * an already-open @c BeginCombo. Both source nodes pick from lists of hundreds
- * (a real match log has 543 entries), which is more than a flat combo can be
- * scrolled through; @c ImGuiComboFlags_HeightLarge is worth passing to the
- * @c BeginCombo that hosts this.
+ * of names, so pass @c ImGuiComboFlags_HeightLarge to the hosting
+ * @c BeginCombo.
  *
  * @param root      Tree from @ref BuildNameTree. The root is a container, so
  *                  its children are what get rendered.

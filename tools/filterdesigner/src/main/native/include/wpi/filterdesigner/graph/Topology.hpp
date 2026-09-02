@@ -30,11 +30,9 @@ bool HasCycle(const Graph& graph);
 std::vector<int> FindCycle(const Graph& graph);
 
 /**
- * Formats a cycle path returned by @ref FindCycle as a human-readable string,
- * e.g. `"Biquad Stage[3] → Biquad Stage[5] → Biquad Stage[3]"`. Uses the
- * node title (from `setTitle`) so the message matches what the user sees on
- * the node header, with the graph-local id appended to disambiguate multiple
- * nodes of the same type. Returns an empty string for an empty path.
+ * Formats a cycle path from @ref FindCycle as node titles with graph-local ids,
+ * e.g. `"Biquad Stage[3] → Biquad Stage[5] → Biquad Stage[3]"`. Empty string
+ * for an empty path.
  */
 std::string FormatCycle(const Graph& graph, const std::vector<int>& path);
 
@@ -45,8 +43,7 @@ std::string FormatCycle(const Graph& graph, const std::vector<int>& path);
  * through ImNodeFlow's pin pulls.
  *
  * Returns false (drawing nothing) when @p node is null, has no owning graph
- * (test fixtures), or the graph is acyclic. Lives here next to the cycle
- * detection so the banner format and the cycle check share one home.
+ * (test fixtures), or the graph is acyclic.
  */
 bool DrawCycleBannerIfAny(FilterDesignerNode* node);
 

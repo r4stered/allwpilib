@@ -41,16 +41,16 @@ class FilterDesignerNode : public ImFlow::BaseNode {
   virtual std::string_view TypeTag() const = 0;
 
   /**
-   * Emit node-specific fields into @p obj (already a JSON object containing
-   * id/type/pos — node implementations only add their own keys).
+   * Emit node-specific fields into the node's JSON object, which already holds
+   * id/type/pos — implementations only add their own keys.
    */
-  virtual void SerializeParams(wpi::util::json& obj) const { (void)obj; }
+  virtual void SerializeParams(wpi::util::json&) const {}
 
   /**
-   * Restore node-specific fields from @p obj. Called by the deserializer
-   * right after construction; node defaults apply for absent fields.
+   * Restore node-specific fields from the node's JSON object. Called by the
+   * deserializer right after construction; defaults apply for absent fields.
    */
-  virtual void DeserializeParams(const wpi::util::json& obj) { (void)obj; }
+  virtual void DeserializeParams(const wpi::util::json&) {}
 
   /** Graph-local id used by the serializer. Assigned by Graph::AddNode. */
   int GraphId() const { return m_graphId; }

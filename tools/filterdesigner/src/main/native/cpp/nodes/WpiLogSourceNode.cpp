@@ -38,9 +38,8 @@ WpiLogSourceNode::WpiLogSourceNode()
     : m_logic(std::make_unique<WpiLogSourceNodeLogic>()) {
   setTitle("WPILOG Source");
   setStyle(ImFlow::NodeStyle::green());
-  // Capture the raw logic pointer; the unique_ptr keeps it alive for the
-  // node's lifetime, and ImNodeFlow tears down links before the OutPin is
-  // destroyed, so this can't outlive its target.
+  // The unique_ptr keeps the logic alive for the node's lifetime, and
+  // ImNodeFlow tears links down before the OutPin, so this can't dangle.
   auto* logic = m_logic.get();
   addOUT<const wpi::filterdesigner::Signal*>("out")->behaviour(
       [logic] { return logic->Signal(); });
@@ -52,8 +51,7 @@ void WpiLogSourceNode::SerializeParams(wpi::util::json& obj) const {
   obj["logPath"] = m_logic->LogPath();
   obj["entry"] = m_logic->SelectedEntry();
   // Only alongside an entry: a window is a pair of timestamps into one
-  // entry's record and means nothing without it. A file written before
-  // windows existed has neither, and reopens on the whole record.
+  // entry's record and means nothing without it.
   if (!m_logic->SelectedEntry().empty()) {
     obj["rangeStart"] = m_logic->SelectedRange().start;
     obj["rangeEnd"] = m_logic->SelectedRange().end;
@@ -73,9 +71,8 @@ void WpiLogSourceNode::DeserializeParams(const wpi::util::json& obj) {
   m_logic->RestoreFromPath(path, entry);
 
   // After the entry, which resets the window to the whole record. A range
-  // that no longer fits — the log was replaced, or the entry now covers a
-  // different span — clamps, and one that clamps to nothing is refused and
-  // leaves the whole record selected.
+  // that no longer fits clamps, and one that clamps to nothing is refused,
+  // leaving the whole record selected.
   const auto* start = obj.lookup("rangeStart");
   const auto* end = obj.lookup("rangeEnd");
   if (start && start->is_number() && end && end->is_number()) {
@@ -100,20 +97,17 @@ void WpiLogSourceNode::Register(NodeRegistry& registry) {
 namespace {
 
 // The entry picker and the timeline strip both stretch to the node's width;
-// this is only the floor, for a node whose other rows are all short. Tall
-// enough to aim a marker at, short enough that the node stays a node — the
-// strip is an orientation and selection surface, not the analysis plot. That
-// is what wiring a Time Plot to the out pin is for.
+// this is only the floor, for a node whose other rows are all short. The strip
+// is an orientation and selection surface, not the analysis plot — that is
+// what wiring a Time Plot to the out pin is for.
 constexpr float kMinContentWidth = 240.0f;
 constexpr float kTimelineHeight = 110.0f;
 // Overview points drawn per frame. A 600 s entry at 250 Hz is 150k samples
-// across a few hundred pixels, so striding down to a couple of thousand costs
-// nothing anyone can see and keeps the node cheap to draw.
+// across a few hundred pixels, so striding costs nothing anyone can see.
 constexpr std::size_t kTimelinePoints = 2000;
-// A marker released within this fraction of the visible span of a segment
-// edge lands on it exactly. A fraction rather than a pixel count so it stays
-// the same gesture at every zoom level, and only segment edges snap: they are
-// the boundaries where a window stops needing interpolant.
+// A marker released within this fraction of the visible span of a segment edge
+// lands on it exactly. A fraction rather than a pixel count, so the gesture is
+// the same at every zoom level.
 constexpr double kSnapFraction = 0.02;
 // Shortest drag, in pixels, that counts as drawing a window rather than as a
 // stray Shift+click.
@@ -164,10 +158,8 @@ void WpiLogSourceNode::DrawTimeline() {
   ImGui::EndDisabled();
 
   // A drag that committed every frame would re-slice and resample the entry
-  // and bump the revision each time, invalidating every downstream cache —
-  // the churn BiquadStageNodeLogic takes a sample-rate deadband to avoid, one
-  // level up. So the markers ride a pending copy between mouse-down and
-  // release, and the window changes exactly once.
+  // each time, invalidating every downstream cache. The markers ride a pending
+  // copy between mouse-down and release, so the window changes exactly once.
   if (!m_dragging) {
     m_pending = m_logic->SelectedRange();
   }
@@ -179,19 +171,16 @@ void WpiLogSourceNode::DrawTimeline() {
   std::string summary =
       std::format("{:.2f} to {:.2f} s of {:.2f} s", low, high, full.Duration());
   // The segment count is why the strip looks striped, and how far there is
-  // still to narrow — entries with dozens of them are ordinary.
+  // still to narrow.
   if (segments.size() > 1) {
     summary += std::format(", {} segments", segments.size());
   }
   ImGui::TextDisabled("%s", summary.c_str());
 
-  // Pan, zoom and box-select stay exactly as ImPlot ships them; Shift+drag is
-  // the window gesture. The one thing that cannot be left alone is pan firing
-  // during that drag, since it is the same button — so for the frames Shift
-  // is down, Pan is parked on a button nobody is pressing. Held through
-  // m_selecting too, or letting go of Shift mid-drag would start panning
-  // halfway through drawing a window. The map is global state, so it goes
-  // back on the way out.
+  // Shift+drag draws the window on the same button ImPlot pans with, so for
+  // the frames Shift is down Pan is parked on a button nobody is pressing —
+  // held through m_selecting too, or releasing Shift mid-drag would pan. The
+  // map is global state, so it goes back on the way out.
   ImPlotInputMap& inputMap = ImPlot::GetInputMap();
   const ImGuiMouseButton savedPan = inputMap.Pan;
   if (ImGui::GetIO().KeyShift || m_selecting) {
@@ -223,9 +212,8 @@ void WpiLogSourceNode::DrawTimeline() {
   const float top = plotPos.y;
   const float bottom = plotPos.y + plotSize.y;
 
-  // Shade the pauses: the holes ResampleToGrid has no choice but to invent
-  // values across, and so the reason a window narrower than the record is
-  // usually the right one.
+  // Shade the pauses: the holes ResampleToGrid has to invent values across,
+  // and so the reason to narrow the window at all.
   ImPlot::PushPlotClipRect();
   for (std::size_t i = 1; i < segments.size(); ++i) {
     const float x0 =
@@ -273,11 +261,8 @@ void WpiLogSourceNode::DrawTimeline() {
   ImPlot::DragLineX(1, &m_pending.end, markerColor, 2.0f,
                     ImPlotDragToolFlags_NoFit, nullptr, nullptr, &endHeld);
 
-  // Shift+drag across the strip draws a new window: press is one edge,
-  // release is the other, so a single gesture names both. Clicking one edge
-  // and inferring which the user meant cannot work — near the start marker
-  // the end is always the farther one, so the end can never be brought close
-  // to the start, and a marker outside the visible range stays unreachable.
+  // Press is one edge, release the other, so a single gesture names both.
+  // A click carries one position and no way to say which edge it meant.
   if (!startHeld && !endHeld && !m_selecting && ImPlot::IsPlotHovered() &&
       ImGui::GetIO().KeyShift && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     m_selecting = true;
@@ -307,9 +292,8 @@ void WpiLogSourceNode::DrawTimeline() {
                         SnapToSegmentEdge(committedHigh, segments, tolerance)};
     if (committedHigh - committedLow < minimum ||
         !m_logic->SelectRange(committed)) {
-      // Too small, or dragged off the record entirely. Put the markers back
-      // on what is actually published rather than leaving them somewhere the
-      // out pin does not agree with.
+      // Too small, or dragged off the record: put the markers back on what
+      // is actually published.
       m_pending = m_logic->SelectedRange();
     }
   }
@@ -343,10 +327,9 @@ void WpiLogSourceNode::PollFileDialog() {
 }
 
 void WpiLogSourceNode::draw() {
-  // Measure what the body draws so DrawTimeline can stretch the strip to it
-  // next frame. ImNodeFlow sizes a node to its widest row after draw()
-  // returns, and GetContentRegionAvail() inside a node reports the whole
-  // canvas, so there is nothing to ask for the width mid-frame.
+  // Measure what the body draws so DrawTimeline can stretch to it next frame.
+  // ImNodeFlow sizes a node after draw() returns, and GetContentRegionAvail()
+  // inside a node reports the whole canvas.
   ImGui::BeginGroup();
   DrawBody();
   ImGui::EndGroup();

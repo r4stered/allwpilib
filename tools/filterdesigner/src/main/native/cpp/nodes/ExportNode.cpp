@@ -91,9 +91,8 @@ void ExportNode::PollFolderPicker() {
 }
 
 void ExportNode::draw() {
-  // The folder-picker poll is intentionally serviced before the cycle gate
-  // below; a pending pfd dialog should keep ticking so it can clean up on
-  // its own timeline regardless of graph state.
+  // Before the cycle gate below: a pending pfd dialog has to keep ticking
+  // whatever the graph is doing.
   PollFolderPicker();
   if (DrawCycleBannerIfAny(this)) {
     return;

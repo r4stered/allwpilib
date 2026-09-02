@@ -168,10 +168,8 @@ TEST_CASE("NT4SourceNodeSerializeTest MissingFieldsUseDefaults",
 
 TEST_CASE("NT4SourceNodeSerializeTest SignalNullUntilDrainProducesSamples",
           "[filterdesigner]") {
-  // The OutPin behaviour returns Logic::Signal() which is null while the
-  // buffer is empty — downstream sinks rely on that null check to skip
-  // rendering. Make sure a freshly-loaded node still honors that contract
-  // (no auto-reconnect, no fake placeholder data).
+  // A freshly-loaded node neither reconnects nor invents placeholder data, so
+  // the out pin stays null and downstream sinks skip rendering.
   NodeRegistry reg;
   RegisterAll(reg);
   Graph graph;
@@ -192,11 +190,8 @@ TEST_CASE("NT4SourceNodeSerializeTest SignalNullUntilDrainProducesSamples",
 TEST_CASE(
     "NT4SourceNodeSerializeTest ConstructionDoesNotAllocateNtcoreInstance",
     "[filterdesigner]") {
-  // The wrapped NetworkTableInstance must be lazy. If a future refactor
-  // reverts to eagerly Create()ing in the ctor, every test in this suite
-  // (and every node ever instantiated on graph load) would silently leak
-  // an ntcore handle. Lock the contract via the public accessor instead
-  // of leaning on inspection.
+  // The wrapped NetworkTableInstance is lazy: creating it in the ctor would
+  // leak an ntcore handle for every node a graph load constructs.
   NodeRegistry reg;
   RegisterAll(reg);
   Graph graph;
@@ -207,10 +202,7 @@ TEST_CASE(
 
 TEST_CASE("NT4SourceNodeSerializeTest SanitizePortCapsAboveMaxOnLoad",
           "[filterdesigner]") {
-  // SanitizePort now caps at 65535 — a hand-edited file with port: 99999
-  // shouldn't pass nonsense to ntcore. Pairs with the existing
-  // SanitizesNegativeTeamAndPortOnLoad case which only exercises the lower
-  // bound.
+  // The upper bound: a hand-edited port of 99999 shouldn't reach ntcore.
   NodeRegistry reg;
   RegisterAll(reg);
   std::string json = R"({

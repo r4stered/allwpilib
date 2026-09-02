@@ -43,9 +43,8 @@ TEST_CASE("BiquadStageCascadeTest UnchainedStageFilterEmitsOwnSectionsOnly",
 
 TEST_CASE("BiquadStageCascadeTest ChainedStagesEmitCumulativeCascade",
           "[filterdesigner]") {
-  // The why-cascade-on-filter-pin demo: Stage A → Stage B → CodeGen exports
-  // A+B, not just B. Users opt in to "just this stage" by wiring earlier in
-  // the Signal chain.
+  // Stage A → Stage B → CodeGen exports A+B, not just B; wiring earlier in
+  // the Signal chain is how you ask for one stage alone.
   Graph graph;
   auto stageA = graph.AddNode<BiquadStageNode>(ImVec2{0.0f, 0.0f});
   auto stageB = graph.AddNode<BiquadStageNode>(ImVec2{200.0f, 0.0f});
@@ -66,9 +65,8 @@ TEST_CASE("BiquadStageCascadeTest ChainedStagesEmitCumulativeCascade",
 
 TEST_CASE("BiquadStageCascadeTest ChainedStagesCacheStablePointer",
           "[filterdesigner]") {
-  // Pointer stability matters — downstream sinks may compare pointer
-  // identity. Repeated calls without param/topology changes must return
-  // the same pointer.
+  // Downstream sinks compare pointer identity, so repeated calls without a
+  // param or topology change must return the same pointer.
   Graph graph;
   auto stageA = graph.AddNode<BiquadStageNode>(ImVec2{0.0f, 0.0f});
   auto stageB = graph.AddNode<BiquadStageNode>(ImVec2{200.0f, 0.0f});
@@ -95,10 +93,8 @@ TEST_CASE("BiquadStageCascadeTest SampleRateMismatchSurfacesAsCombinedError",
 
 TEST_CASE("BiquadStageCascadeTest CombinedFilterSurvivesSerializeDeserialize",
           "[filterdesigner]") {
-  // Two-stage cascade A → B → CodeGen, save, reload, then pull
-  // CombinedFilter() on the restored stage B and confirm the cumulative
-  // section count matches A + B. Pairs with the topology round-trip test
-  // to verify the math survives serialize too.
+  // A → B → CodeGen, saved and reloaded: the restored B's cumulative cascade
+  // still has A's sections in front of its own.
   NodeRegistry reg;
   BiquadStageNode::Register(reg);
   CodeGenNode::Register(reg);
@@ -136,10 +132,8 @@ TEST_CASE("BiquadStageCascadeTest CombinedFilterSurvivesSerializeDeserialize",
 
 TEST_CASE("BiquadStageCascadeTest NonBiquadUpstreamYieldsThisStageOnly",
           "[filterdesigner]") {
-  // ImpulseSource → BiquadStage → CodeGen. The Impulse-style source isn't a
-  // BiquadStage, so the dynamic_cast in UpstreamStage() must return null
-  // and the cascade collapses to just this stage's sections. Closes the
-  // "dynamic_cast nullptr branch is uncovered" gap.
+  // An upstream that isn't a BiquadStage leaves UpstreamStage() null, so the
+  // cascade collapses to this stage's own sections.
   Graph graph;
   auto impulse =
       graph.AddNode<wpi::filterdesigner::ImpulseNode>(ImVec2{0.0f, 0.0f});
@@ -160,14 +154,10 @@ TEST_CASE("BiquadStageCascadeTest NonBiquadUpstreamYieldsThisStageOnly",
 
 TEST_CASE("BiquadStageCascadeTest CycleGuardCatchesTwoNodeCycleWithoutCrashing",
           "[filterdesigner]") {
-  // A.signal → B.in and B.signal → A.in. ImNodeFlow refuses same-node
-  // links so a length-1 self-loop can't be wired through the public API,
-  // but a two-node cycle slips past the same-parent guard. Without the
-  // depth guard, CombinedFilter() would recurse unbounded between A and B
-  // and stack-overflow on the per-frame walk; the guard turns that into a
-  // nullptr + cycle error. Graph-level cycle detection (TopologyTest) is
-  // the primary defense in production; this test pins the per-stage
-  // backstop that fires when callers walk upstream directly.
+  // A.signal → B.in and B.signal → A.in. ImNodeFlow's same-parent guard
+  // refuses a self-link but not a two-node cycle, which CombinedFilter would
+  // otherwise recurse through unbounded; the depth guard turns that into a
+  // nullptr and a cycle error.
   Graph graph;
   auto a = graph.AddNode<BiquadStageNode>(ImVec2{0.0f, 0.0f});
   auto b = graph.AddNode<BiquadStageNode>(ImVec2{200.0f, 0.0f});
@@ -184,8 +174,8 @@ TEST_CASE("BiquadStageCascadeTest CycleGuardCatchesTwoNodeCycleWithoutCrashing",
 
 TEST_CASE("BiquadStageCascadeTest UpstreamErrorForReportsUnwiredAsEmpty",
           "[filterdesigner]") {
-  // Helper that sinks call to differentiate "no input wired" from "input
-  // wired but errored": no link → empty string.
+  // No link → empty string, which is how sinks tell an unwired input from a
+  // wired-but-errored one.
   Graph graph;
   auto codegen = graph.AddNode<CodeGenNode>(ImVec2{0.0f, 0.0f});
   CHECK(BiquadStageNode::UpstreamErrorFor(codegen->inPin("in")).empty());
@@ -193,8 +183,7 @@ TEST_CASE("BiquadStageCascadeTest UpstreamErrorForReportsUnwiredAsEmpty",
 
 TEST_CASE("BiquadStageCascadeTest UpstreamErrorForReportsStageDesignError",
           "[filterdesigner]") {
-  // Wire a deliberately broken BiquadStage to the sink and verify the
-  // helper surfaces the upstream's error string.
+  // A deliberately broken upstream: the helper surfaces its error string.
   Graph graph;
   auto stage = graph.AddNode<BiquadStageNode>(ImVec2{0.0f, 0.0f});
   auto codegen = graph.AddNode<CodeGenNode>(ImVec2{200.0f, 0.0f});

@@ -38,10 +38,9 @@ TimePlotNode::TimePlotNode() : m_logic(std::make_unique<TimePlotNodeLogic>()) {
   setTitle("Time Plot");
   setStyle(ImFlow::NodeStyle::cyan());
   for (int i = 0; i < kInputCount; ++i) {
-    // Per-slot pin color drives the wire color too (Link::update reads the
-    // destination pin's style) and the plotted series is forced to match
-    // below — so wire, socket, and curve all agree per slot regardless of
-    // wiring order. Style fields beyond `color` mirror PinStyle::cyan().
+    // Link::update reads the destination pin's style, and the series is
+    // forced to match below, so wire, socket and curve agree per slot
+    // whatever order the inputs were wired in.
     auto style = std::make_shared<ImFlow::PinStyle>(PlotPaletteU32(i), 0, 4.f,
                                                     4.67f, 3.7f, 1.f);
     addIN<const wpi::filterdesigner::Signal*>(
@@ -55,9 +54,8 @@ TimePlotNode::~TimePlotNode() = default;
 void TimePlotNode::SerializeParams(wpi::util::json& obj) const {
   obj["autoscale"] = m_logic->autoscale;
   obj["showLegend"] = m_logic->showLegend;
-  // Clamp on the way out too — keeps the on-disk file aligned with the
-  // bounds the loader applies, so a hand-edited or migrated file can't ping-
-  // pong an out-of-range value across save/load cycles.
+  // Clamp on the way out too, so a hand-edited file can't ping-pong an
+  // out-of-range value across save/load cycles.
   obj["plotWidth"] =
       std::max(TimePlotNodeLogic::kMinPlotWidth, m_logic->plotWidth);
   obj["plotHeight"] =
@@ -124,11 +122,9 @@ void TimePlotNode::draw() {
 
   ImVec2 plotSize{m_logic->plotWidth, m_logic->plotHeight};
   if (ImPlot::BeginPlot("##timeplot", plotSize)) {
-    // Live sources stream into a sliding buffer (NT4Source trims to its
-    // window each Update), so the displayed timestamps drift upward forever.
-    // AutoFit on X each frame pins the view to the buffered span so the plot
-    // shows the last N seconds instead of letting data scroll past a fixed
-    // initial range. Static sources stay manual so pan/zoom keep working.
+    // A live source's timestamps drift upward forever, so AutoFit pins the
+    // view to the buffered span. Static sources stay manual, keeping pan and
+    // zoom.
     ImPlotAxisFlags xFlags =
         anyLive ? ImPlotAxisFlags_AutoFit : ImPlotAxisFlags_None;
     ImPlotAxisFlags yFlags =
@@ -145,8 +141,7 @@ void TimePlotNode::draw() {
       }
       int count = static_cast<int>(std::min<size_t>(
           sig->values.size(), std::numeric_limits<int>::max()));
-      // Series labels prefer the signal's own name (helps when multiple
-      // sources from different logs are wired in); pin name is the fallback.
+      // The signal's own name, which distinguishes two logs' entries.
       const std::string label =
           sig->name.empty() ? std::string{kInputNames[i]} : sig->name;
       ImPlot::PlotLine(label.c_str(), sig->timestamps.data(),
@@ -156,10 +151,8 @@ void TimePlotNode::draw() {
     ImPlot::EndPlot();
   }
 
-  // Resize grip just below the plot, bottom-right. ImNodeFlow only takes
-  // node-drag from the header rectangle, so an interactive widget here is
-  // safe. Anchored to the bottom edge of the plot's last bounding box so
-  // it visually attaches to the plot's corner.
+  // Safe as an interactive widget: ImNodeFlow only takes node-drag from the
+  // header rectangle.
   const float kGripSize = 12.0f;
   ImVec2 plotBR = ImGui::GetItemRectMax();
   ImGui::SetCursorScreenPos(ImVec2{plotBR.x - kGripSize, plotBR.y - kGripSize});
@@ -175,8 +168,7 @@ void TimePlotNode::draw() {
   if (hovered || ImGui::IsItemActive()) {
     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
   }
-  // Three short diagonal strokes — the same affordance ImGui uses on window
-  // resize grips, so it reads as "drag me" without needing a tooltip.
+  // Three short diagonal strokes, as ImGui's own window resize grips.
   ImU32 gripColor =
       ImGui::GetColorU32(hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
   ImDrawList* dl = ImGui::GetWindowDrawList();

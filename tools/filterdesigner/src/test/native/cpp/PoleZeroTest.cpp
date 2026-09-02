@@ -68,12 +68,10 @@ TEST_CASE("PoleZeroTest ButterworthLowPassPolesInsideUnitCircle",
 }
 
 TEST_CASE("PoleZeroTest ButterworthLowPassZerosAtNyquist", "[filterdesigner]") {
-  // The bilinear transform maps analog zeros at infinity to z = -1 (Nyquist).
-  // A 4th-order Butterworth LP has 4 zeros, all at z = -1. Tolerance is ~1e-6
-  // because (a) the design pipeline accumulates small floating-point error and
-  // (b) repeated real roots come out of the quadratic formula with a spurious
-  // imaginary part on the order of sqrt(machine epsilon) when the discriminant
-  // is computed as a near-zero difference.
+  // The bilinear transform maps analog zeros at infinity to z = -1, so a
+  // 4th-order Butterworth LP has four zeros there. The 1e-6 tolerance is for
+  // the repeated real roots, which the quadratic formula returns with a
+  // spurious imaginary part around sqrt(machine epsilon).
   auto filter = SectionsOf(BiquadFilter::Butterworth(
       BiquadFilter::Kind::LowPass, 4, 1000_Hz, 100_Hz));
   auto pz = ComputePolesZeros(filter);
@@ -86,11 +84,9 @@ TEST_CASE("PoleZeroTest ButterworthLowPassZerosAtNyquist", "[filterdesigner]") {
 }
 
 TEST_CASE("PoleZeroTest ButterworthHighPassZerosAtDC", "[filterdesigner]") {
-  // High-pass: analog zeros at 0 map to z = 1 under bilinear transform. For
-  // order=3, the cascade is one biquad (real-pole-pair) + one first-order
-  // section. The biquad's numerator is (z-1)^2 (two zeros at unity); the
-  // first-order section's biquad form is z(z-1), contributing one more zero
-  // at unity plus a structural zero at the origin.
+  // High-pass: analog zeros at 0 map to z = 1. At order 3 the cascade is one
+  // biquad, numerator (z-1)^2, plus a first-order section whose biquad form is
+  // z(z-1) — a third zero at unity and a structural one at the origin.
   auto filter = SectionsOf(BiquadFilter::Butterworth(
       BiquadFilter::Kind::HighPass, 3, 1000_Hz, 100_Hz));
   auto pz = ComputePolesZeros(filter);

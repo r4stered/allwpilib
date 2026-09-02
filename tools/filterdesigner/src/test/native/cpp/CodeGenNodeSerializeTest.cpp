@@ -102,8 +102,8 @@ TEST_CASE("CodeGenNodeSerializeTest BiquadStageToCodeGenLinkRoundTrips",
 
 TEST_CASE("CodeGenNodeSerializeTest BiquadStageToMultipleSinksRoundTrips",
           "[filterdesigner]") {
-  // Multi-language export off one Filter wire — the canonical "why
-  // CodeGen-as-sink" example from the plan.
+  // Multi-language export off one Filter wire: two CodeGen sinks, no
+  // multiplexing inside either.
   NodeRegistry reg;
   BiquadStageNode::Register(reg);
   CodeGenNode::Register(reg);

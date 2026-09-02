@@ -17,14 +17,10 @@ namespace wpi::filterdesigner {
 
 namespace {
 
-// Fill fractions at which the sampling readout escalates. Below kWarnFilled
-// the reconstruction is a handful of dropped packets; above kBadFilled the
-// grid is mostly interpolant and any spectrum is an artifact of the
-// reconstruction, not of the robot.
+// Fill fractions at which the sampling readout escalates. Past kBadFilled the
+// grid is mostly interpolant, and any spectrum describes the reconstruction.
 constexpr double kWarnFilled = 0.05;
 constexpr double kBadFilled = 0.25;
-// Jitter beyond this fraction of a period means the typical interval misses
-// the inferred period by a quarter of it — the rate barely describes the data.
 constexpr double kWarnJitter = 0.25;
 // Intervals longer than this are dropouts rather than mistimings, and are left
 // out of the jitter statistic; longestGap and filled report them instead.
@@ -77,17 +73,9 @@ void Signal::ResampleToGrid() {
   }
   const double period = 1.0 / sampleRate;
 
-  // Walk in from both ends past samples no dropout explains. A topic that
-  // publishes once when NetworkTables connects and then goes quiet until the
-  // robot is enabled leaves one sample minutes ahead of its own data; that
-  // sample is the grid's origin, and the entry then reads as most of a record
-  // of nothing. Better than a third of the numeric entries in a real match log
-  // have that shape, and dropping the one sample takes the median entry from
-  // 71% filled to 44%.
-  //
-  // One sample at a time rather than by segment: a leading run that is dense
-  // in itself is a stretch of logging, and choosing between it and the body is
-  // the user's call, not this function's.
+  // Walk in from both ends past samples no dropout explains, one at a time
+  // rather than by segment: choosing between a dense leading run and the body
+  // is the user's call, not this function's.
   std::size_t first = 0;
   std::size_t last = count - 1;
   while (last - first >= 2 &&
@@ -102,16 +90,8 @@ void Signal::ResampleToGrid() {
   quality.trimmed = count - kept;
   const double origin = timestamps[first];
 
-  // Measure the timing before deciding whether to build the grid, so the
-  // readout stays populated even when we refuse. Everything below describes
-  // the kept window: reporting the lead-in's gap alongside a grid that
-  // excludes it would describe data the caller no longer has.
-  //
-  // Jitter is the error of each interval, not each timestamp's distance from
-  // the slot it lands on. That distance is the running sum of the interval
-  // errors, so it random-walks away from any fixed grid and saturates near
-  // half a period within a few dozen samples — the same reading for good
-  // timing as for bad. Interval error stays comparable across the record.
+  // Measure the kept window before deciding whether to build the grid, so the
+  // readout stays populated even when we refuse.
   std::vector<double> errors;
   errors.reserve(kept);
   for (std::size_t i = first + 1; i <= last; ++i) {
@@ -121,8 +101,6 @@ void Signal::ResampleToGrid() {
       errors.push_back(std::abs(gap - period) / period);
     }
   }
-  // The period is the median interval, so this is only empty if a caller
-  // handed us unsorted timestamps.
   if (!errors.empty()) {
     auto mid = errors.begin() + errors.size() / 2;
     std::nth_element(errors.begin(), mid, errors.end());
@@ -130,7 +108,7 @@ void Signal::ResampleToGrid() {
   }
 
   // Slot counts stay in doubles so a decades-long gap can't overflow before
-  // we get a chance to reject it.
+  // the checks below reject it.
   const double slotCount =
       std::round((timestamps[last] - origin) / period) + 1.0;
   quality.filled = std::max(0.0, 1.0 - static_cast<double>(kept) / slotCount);
@@ -144,17 +122,10 @@ void Signal::ResampleToGrid() {
   std::vector<double> gridTimestamps(total);
   std::vector<double> gridValues(total);
 
-  // Walk the grid and the samples together, both in time order, keeping a
-  // cursor on the last sample at or before the current slot.
-  //
-  // Interpolating between that sample and the next is what spends the
-  // sub-slot part of a timestamp. Rounding to the nearest slot discards it
-  // and substitutes a quantization error uniform over half a period either
-  // way, which is larger than the jitter of a real log.
-  //
-  // A discrete signal holds instead — there is no value between false and
-  // true to interpolate to. The cursor never looks past the slot, so the hold
-  // is causal, matching what a robot reading the topic each loop would see.
+  // Walk the grid and the samples together, keeping a cursor on the last
+  // sample at or before the current slot. A discrete signal holds from that
+  // sample rather than interpolating; the cursor never looks past the slot, so
+  // the hold is causal.
   std::size_t left = first;
   for (std::size_t slot = 0; slot < total; ++slot) {
     const double t = origin + static_cast<double>(slot) * period;
@@ -168,7 +139,7 @@ void Signal::ResampleToGrid() {
     }
     // Interpolation needs a right-hand neighbour, so back off the final
     // sample. Clamping covers the last slot, which floating point can land a
-    // hair past that sample, and samples sharing a timestamp.
+    // hair past it.
     const std::size_t lo = std::min(left, last - 1);
     const double width = timestamps[lo + 1] - timestamps[lo];
     const double alpha =
@@ -211,9 +182,7 @@ Signal Signal::Window(TimeRange range) const {
   if (count == 0 || range.Empty()) {
     return out;
   }
-  // Timestamps are in order, so the window is a contiguous run. Closed at
-  // both ends: a marker parked exactly on a sample should catch it rather
-  // than depend on which side of the comparison it lands.
+  // Closed at both ends, so a marker parked exactly on a sample catches it.
   const auto begin = timestamps.begin();
   const auto lo = std::lower_bound(begin, begin + count, range.start);
   const auto hi = std::upper_bound(lo, begin + count, range.end);
@@ -222,8 +191,6 @@ Signal Signal::Window(TimeRange range) const {
   out.timestamps.assign(timestamps.begin() + first,
                         timestamps.begin() + first + kept);
   out.values.assign(values.begin() + first, values.begin() + first + kept);
-  // One resample, over the sliced raw samples: the window's rate and its fill
-  // fraction both describe what is inside it, not what the whole record cost.
   out.ResampleToGrid();
   return out;
 }
@@ -251,8 +218,6 @@ std::string DescribeSampling(const Signal& signal) {
   text +=
       std::format(", longest gap {}", FormatSeconds(signal.quality.longestGap));
   if (!signal.quality.onGrid) {
-    // Nothing was dropped on this path, so the trim count stays out of it:
-    // there it says only which window the numbers above describe.
     text += ", gap too large to resample";
   } else if (signal.quality.trimmed > 0) {
     text += std::format(", {} sample{} trimmed", signal.quality.trimmed,

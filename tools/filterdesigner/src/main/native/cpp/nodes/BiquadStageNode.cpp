@@ -43,11 +43,9 @@ BiquadStageNode::BiquadStageNode()
   addIN<const wpi::filterdesigner::Signal*>(
       "in", nullptr, ImFlow::ConnectionFilter::SameType());
 
-  // The filter pin walks the Signal chain upstream and emits the cumulative
-  // cascade through this stage — see CombinedFilter. The signal pin only
-  // applies *this* stage's filter; the chain composes naturally because the
-  // input has already been filtered by the upstream stage's signal pin.
-  // Both lambdas capture the node so they can reach back through ImNodeFlow.
+  // The filter pin emits the cumulative cascade (see CombinedFilter); the
+  // signal pin applies only this stage, since its input has already been
+  // filtered by the upstream stage.
   auto* logic = m_logic.get();
   auto* self = this;
   addOUT<const wpi::filterdesigner::DesignedFilter*>("filter")->behaviour(
@@ -62,10 +60,7 @@ BiquadStageNode::BiquadStageNode()
 BiquadStageNode::~BiquadStageNode() = default;
 
 const BiquadStageNode* BiquadStageNode::UpstreamStage() const {
-  // BaseNode::inPin returns a raw Pin*; the dynamic_cast filters out the
-  // case where the wire is connected to something other than a
-  // BiquadStageNode (e.g. WpiLogSource), in which case we treat this stage
-  // as the head of the chain.
+  // A wire from anything but another stage makes this the head of the chain.
   auto* inPinPtr = const_cast<BiquadStageNode*>(this)->inPin("in");
   if (!inPinPtr) {
     return nullptr;
@@ -105,13 +100,10 @@ const DesignedFilter* BiquadStageNode::CombinedFilter() const {
 }
 
 const DesignedFilter* BiquadStageNode::CombinedFilterImpl(int depth) const {
-  // Defense-in-depth alongside the Graph-level cycle detector: a user-
-  // introduced cycle (`A.signal → B.in`, `B.signal → A.in`) would otherwise
-  // stack-overflow this walk every frame. The Graph gate normally stops
-  // sinks from pulling first, but callers that walk upstream directly need
-  // this depth cap too. A cap several orders above any realistic cascade
-  // keeps the per-frame cost ~free while turning the crash into a visible
-  // per-stage error banner.
+  // The Graph-level cycle detector normally stops sinks from pulling into a
+  // cycle, but a caller walking upstream directly needs its own guard: without
+  // one, `A.signal → B.in` plus `B.signal → A.in` overflows the stack every
+  // frame. The cap sits far above any realistic cascade.
   constexpr int kMaxCascadeDepth = 256;
   if (depth >= kMaxCascadeDepth) {
     m_combinedError = "Filter cascade too deep — graph likely has a cycle.";
@@ -121,8 +113,6 @@ const DesignedFilter* BiquadStageNode::CombinedFilterImpl(int depth) const {
 
   const DesignedFilter* self = m_logic->Filter();
   if (!self) {
-    // Surface the per-stage design error verbatim so the user sees one
-    // message, not "combined: stage error".
     m_combinedError = m_logic->DesignError();
     m_haveCombined = false;
     return nullptr;
@@ -136,8 +126,6 @@ const DesignedFilter* BiquadStageNode::CombinedFilterImpl(int depth) const {
   std::uint64_t selfVersion = m_logic->FilterVersion();
 
   if (upstreamNode && !upstreamFilter) {
-    // Upstream stage is in an error state — propagate that, don't silently
-    // drop its sections.
     m_combinedError = upstreamNode->CombinedError().empty()
                           ? std::string{"Upstream stage has invalid design."}
                           : upstreamNode->CombinedError();
@@ -250,9 +238,8 @@ void BiquadStageNode::Register(NodeRegistry& registry) {
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 
 void BiquadStageNode::draw() {
-  // BiquadStage pulls input via getInVal + CombinedFilter() below; under a
-  // cycle those would recurse through ImNodeFlow's pin behaviours, so gate
-  // the whole body on the per-frame banner just like the sink nodes do.
+  // getInVal and CombinedFilter both recurse through pin behaviours, so gate
+  // the body on the banner as the sinks do.
   if (DrawCycleBannerIfAny(this)) {
     return;
   }
@@ -260,20 +247,14 @@ void BiquadStageNode::draw() {
   // Keep stage nodes compact so multi-stage chains stay readable.
   const float kItemWidth = 160.0f;
 
-  // Pull the input first so the sample-rate field can mirror it before we
-  // draw the InputDouble — otherwise the displayed value lags by one frame.
+  // Before the InputDouble, or the mirrored rate lags a frame behind.
   const Signal* input = getInVal<const Signal*>("in");
   const bool inputHasRate = input && input->sampleRate > 0.0;
   if (m_logic->sampleRateAutoSync && inputHasRate) {
-    // NT4Source infers its rate from the median of timestamp diffs across a
-    // sliding ring buffer. Each sample that rolls in/out shifts the median
-    // by a few microseconds of jitter — sub-1% wobble around a steady
-    // underlying rate. The design cache keys on exact `m_designedFs ==
-    // sampleRate` equality, so syncing every frame triggers a full filter
-    // redesign + re-apply + downstream cache invalidation cascade on data
-    // we know hasn't actually changed rate. Take a 1% deadband: only adopt
-    // the input rate when it truly diverges, leaving small jitter to wash
-    // out at the inferred-rate layer instead of churning the filter.
+    // A live source's inferred rate wobbles by well under a percent as
+    // samples roll through its ring buffer, and the design cache keys on
+    // exact equality — so adopting every wobble would redesign the filter and
+    // invalidate every downstream cache each frame. Deadband it.
     constexpr double kRateSyncTolerance = 0.01;
     const double cur = m_logic->sampleRate;
     if (cur <= 0.0 ||
@@ -287,8 +268,7 @@ void BiquadStageNode::draw() {
   ImGui::BeginDisabled(autoActive);
   if (ImGui::InputDouble("Sample rate (Hz)", &m_logic->sampleRate, 0.0, 0.0,
                          "%.3f")) {
-    // Any hand-edit drops the stage out of auto mode; the Auto checkbox
-    // below re-enables tracking.
+    // A hand-edit drops out of auto mode; the Auto checkbox re-enables it.
     m_logic->sampleRateAutoSync = false;
   }
   ImGui::EndDisabled();
@@ -359,17 +339,14 @@ void BiquadStageNode::draw() {
     }
   }
 
-  // Force a combined-design pass this frame so the banner reflects both
-  // this stage's params and any upstream chain state (sample-rate mismatch,
-  // upstream design error). Cheap — cached on (upstream pointer + version,
-  // self version).
+  // Force a combined-design pass so the banner reflects upstream state too.
+  // Cached on (upstream pointer and version, self version).
   const DesignedFilter* combined = CombinedFilter();
   if (!combined) {
     ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s",
                        CombinedError().c_str());
   } else if (const DesignedFilter* self = m_logic->Filter();
              self && combined->sections.size() > self->sections.size()) {
-    // Chained — tell the user the filter pin emits the full cascade.
     ImGui::TextDisabled("Cascade: %zu sections (this stage: %zu)",
                         combined->sections.size(), self->sections.size());
   } else {

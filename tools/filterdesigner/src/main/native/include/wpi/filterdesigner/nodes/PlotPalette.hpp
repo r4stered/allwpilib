@@ -13,19 +13,14 @@ namespace wpi::filterdesigner {
 /**
  * Per-input-pin colors for plot-style sink nodes.
  *
- * The four-input plot sinks (Time, Bode, Frequency, Pole/Zero) all share the
- * same color contract: pin `inN` is the Nth color in this palette, the
- * destination-end wire is the same color (see ImNodeFlow's Link::update),
- * and the rendered series is forced to the same color via
- * `ImPlotProp_LineColor`. That way the wire physically traces the data into
- * the matching curve without relying on ImPlot's auto-cycling, which depends
- * on series-add order across the whole plot and is unstable when inputs
- * connect in different orders.
+ * The four-input plot sinks (Time, Bode, Frequency, Pole/Zero) share one color
+ * contract: pin `inN` takes the Nth color, so does the destination end of its
+ * wire (ImNodeFlow's Link::update), and so does the series it feeds. The wire
+ * then traces the data into its curve, which ImPlot's auto-cycling cannot
+ * promise — it depends on series-add order across the whole plot.
  *
- * Colors are the first four entries of seaborn / ImPlot's "Deep" palette —
- * close enough to the auto-assigned series colors that users perceive them
- * as identical, but stable per-slot regardless of how many other plots
- * exist on the canvas.
+ * The colors are the first four of ImPlot's "Deep" palette, near enough to the
+ * auto-assigned ones to pass for them.
  */
 inline constexpr std::array<ImU32, 4> kPlotPaletteU32 = {
     IM_COL32(76, 114, 176, 255),  // blue

@@ -25,10 +25,8 @@ using wpi::filterdesigner::Graph;
 using wpi::filterdesigner::NodeRegistry;
 using wpi::filterdesigner::SerializeGraph;
 
-// Two test-only node types: one source (one int-typed output), one sink
-// (one int-typed input). Mirrors the shape of a real source/sink pair
-// without dragging in ImGui dependencies (wpilog loading, ImPlot
-// rendering).
+// One source, one sink, both int-typed: the shape of a real pair without the
+// ImGui dependencies.
 
 class FakeSourceNode : public FilterDesignerNode {
  public:
@@ -201,11 +199,8 @@ TEST_CASE("SerializeTest UnknownNodeTypeSkippedWithWarning",
 
 TEST_CASE("SerializeTest UnknownPinNameSkippedWithWarning",
           "[filterdesigner]") {
-  // Pre-fix, BaseNode::inPin/outPin asserted on miss + dereffed end() in
-  // release builds — so a stale or hand-edited file referencing a pin name
-  // that doesn't exist on the node would UB-deref instead of warning. Now
-  // the load path matches by name via getIns()/getOuts() and skips
-  // gracefully.
+  // A file naming a pin the node doesn't have is skipped with a warning:
+  // BaseNode::inPin/outPin would assert, and UB-deref in a release build.
   NodeRegistry reg;
   RegisterFakes(reg);
 
@@ -232,9 +227,8 @@ TEST_CASE("SerializeTest UnknownPinNameSkippedWithWarning",
 }
 
 TEST_CASE("SerializeTest NonNumericPosSkippedWithWarning", "[filterdesigner]") {
-  // Pre-fix, pos[0].get_number() would throw/abort in release builds on a
-  // malformed pos field. Now the loader validates types and skips the
-  // offending node with a warning.
+  // A malformed pos field is skipped with a warning; get_number() on it
+  // would throw or abort in a release build.
   NodeRegistry reg;
   RegisterFakes(reg);
 
@@ -258,10 +252,8 @@ TEST_CASE("SerializeTest NonNumericPosSkippedWithWarning", "[filterdesigner]") {
 
 TEST_CASE("SerializeTest GraphResetCallbackFiresOnDeserialize",
           "[filterdesigner]") {
-  // GraphEditor relies on the OnReset hook to re-attach the CreationPopup
-  // after the deserializer rebuilds the underlying ImNodeFlow. Pin that
-  // contract here so a future refactor of Graph::Reset can't silently drop
-  // the call without a failing test.
+  // GraphEditor re-attaches the CreationPopup from this hook, the
+  // deserializer having rebuilt the ImNodeFlow the old one was bound to.
   NodeRegistry reg;
   RegisterFakes(reg);
 

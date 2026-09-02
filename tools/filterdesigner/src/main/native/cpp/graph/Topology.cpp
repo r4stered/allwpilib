@@ -20,11 +20,9 @@ namespace wpi::filterdesigner {
 
 namespace {
 
-// Iterative three-color DFS. Returns the first back-edge cycle it finds as
-// an ordered id list with the entry id repeated at the end. Iterative
-// because deeply-nested user graphs (e.g. a chain of 200 stages with a
-// pathological cycle at the head) shouldn't risk a recursion stack overflow
-// inside a per-frame check.
+// Iterative three-color DFS, returning the first back-edge cycle as an ordered
+// id list with the entry id repeated at the end. Iterative because a long user
+// chain shouldn't risk a stack overflow inside a per-frame check.
 std::vector<int> FindCycleImpl(
     const std::vector<int>& ids,
     const std::unordered_map<int, std::vector<int>>& adj) {
@@ -40,29 +38,23 @@ std::vector<int> FindCycleImpl(
       continue;
     }
 
-    // Stack frames track (node, next-neighbor-index). The stack itself
-    // doubles as the current DFS path — when we hit a Gray node, the path
-    // back to it is the suffix of the stack starting at the first frame
-    // whose node id == the gray target.
+    // Frames are (node, next-neighbor-index), and the stack doubles as the
+    // current DFS path: the cycle is its suffix from the gray target on.
     std::vector<std::pair<int, std::size_t>> stack;
     stack.emplace_back(start, 0);
     color[start] = Gray;
 
     while (!stack.empty()) {
       auto& [cur, idx] = stack.back();
-      // FindCycle pre-seeds adj with an entry for every id, and `next` is
-      // filtered through `known` before being pushed onto the stack, so
-      // adj.at(cur) is guaranteed to find an entry. Using a direct reference
-      // (rather than a `find()`/ternary form) avoids a per-iteration copy of
-      // the neighbor vector — the ternary's mixed value categories collapse
-      // to a prvalue and force a copy.
+      // at() rather than a find()/ternary, whose mixed value categories
+      // collapse to a prvalue and copy the neighbor vector every iteration.
+      // FindCycle seeds adj for every id, so the lookup always hits.
       const auto& outs = adj.at(cur);
       if (idx < outs.size()) {
         int next = outs[idx++];
         auto cIt = color.find(next);
         if (cIt == color.end()) {
-          // Link target points outside the live node set (e.g. a stale link
-          // mid-teardown). Ignore.
+          // Link target outside the live node set.
           continue;
         }
         if (cIt->second == Gray) {
@@ -101,9 +93,8 @@ bool HasCycle(const Graph& graph) {
 }
 
 std::vector<int> FindCycle(const Graph& graph) {
-  // Snapshot the live node id list + adjacency once. Graph::Nodes() and
-  // Graph::Links() each iterate ImNodeFlow's internal containers; pulling
-  // them once keeps the hot path inside the unordered_maps.
+  // Snapshot ids and adjacency once: Nodes() and Links() each walk
+  // ImNodeFlow's internal containers.
   auto nodes = graph.Nodes();
   std::vector<int> ids;
   ids.reserve(nodes.size());
@@ -118,9 +109,7 @@ std::vector<int> FindCycle(const Graph& graph) {
     adj[id];  // Ensure every node has an entry, even with no out-edges.
   }
   for (const auto& l : graph.Links()) {
-    // Drop links that reference unknown ids (defensive — should not happen
-    // for links surfaced by Graph::Links, but a graph mid-teardown could
-    // surface a half-deleted link).
+    // A graph mid-teardown can surface a half-deleted link.
     if (!known.count(l.srcId) || !known.count(l.dstId)) {
       continue;
     }
@@ -135,7 +124,6 @@ std::string FormatCycle(const Graph& graph, const std::vector<int>& path) {
     return {};
   }
 
-  // Build an id → node lookup once so we don't FindNodeById in a loop.
   std::unordered_map<int, FilterDesignerNode*> byId;
   for (auto* n : graph.Nodes()) {
     byId[n->GraphId()] = n;
@@ -149,16 +137,14 @@ std::string FormatCycle(const Graph& graph, const std::vector<int>& path) {
     int id = path[i];
     auto it = byId.find(id);
     if (it != byId.end() && it->second) {
-      // BaseNode::getName isn't const-qualified upstream; the call doesn't
-      // mutate state in practice.
       const std::string& title = it->second->getName();
       out += title.empty() ? std::string{it->second->TypeTag()} : title;
       out += '[';
       out += std::to_string(id);
       out += ']';
     } else {
-      // Should be unreachable — FindCycle filters unknown ids — but keep the
-      // formatter total in case a caller hands us a synthetic path.
+      // Unreachable from FindCycle, which filters unknown ids; keeps the
+      // formatter total for a synthetic path.
       out += '[';
       out += std::to_string(id);
       out += ']';
