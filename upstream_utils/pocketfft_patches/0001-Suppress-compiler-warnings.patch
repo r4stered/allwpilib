@@ -11,7 +11,7 @@ diff --git a/pocketfft_hdronly.h b/pocketfft_hdronly.h
 index 330e7e051500669d767117475db81abb57af2917..44fcb7f70a8d8b14e7e742686a8fc26637ed0633 100644
 --- a/pocketfft_hdronly.h
 +++ b/pocketfft_hdronly.h
-@@ -45,6 +45,21 @@
+@@ -45,6 +45,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  #ifndef POCKETFFT_HDRONLY_H
  #define POCKETFFT_HDRONLY_H
  
