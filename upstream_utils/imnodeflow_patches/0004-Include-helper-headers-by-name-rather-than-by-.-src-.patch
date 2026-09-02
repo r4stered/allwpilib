@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Drew Williams <williams.r.drew@gmail.com>
 Date: Wed, 2 Sep 2026 11:55:32 -0700
-Subject: [PATCH 4/4] Include helper headers by name rather than by ../src path
+Subject: [PATCH 4/5] Include helper headers by name rather than by ../src path
 
 The public header reached into ../src for its inline templates and helper
 headers, which only resolves when include/ and src/ keep their upstream
