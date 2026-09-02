@@ -80,6 +80,63 @@ struct GridQuality {
 };
 
 /**
+ * A closed time window, in seconds, of a signal's record.
+ *
+ * Used for the user's analysis selection on a WPILOG source: the source node
+ * slices its raw samples to this window and resamples that, so the window
+ * gets its own grid rather than a re-measurement of the whole record's.
+ */
+struct TimeRange {
+  double start = 0.0;
+  double end = 0.0;
+
+  /**
+   * True when the window is inverted, and so selects nothing at all. A
+   * zero-width window is not empty: being closed at both ends it still
+   * catches a sample landing exactly on it, which is the state a one-sample
+   * entry's whole record is.
+   */
+  bool Empty() const { return end < start; }
+  /** Length of the window in seconds; 0 when @ref Empty. */
+  double Duration() const { return Empty() ? 0.0 : end - start; }
+  /** True when @p t falls inside the closed window. */
+  bool Contains(double t) const { return t >= start && t <= end; }
+
+  friend bool operator==(const TimeRange&, const TimeRange&) = default;
+};
+
+/**
+ * One contiguous stretch of logging within a signal's raw samples.
+ *
+ * A real match log is not one recording but dozens: a topic publishes while
+ * the robot is enabled, goes quiet for minutes, and resumes. Interpolating
+ * across those holes — which @ref Signal::ResampleToGrid must do, having only
+ * one grid to work with — produces a spectrum of the reconstruction rather
+ * than of the robot. Segments are where the recordings actually are, and give
+ * the source node's timeline both its shading and its snap targets.
+ *
+ * @ref first and @ref last index the timestamps array the segment was found
+ * in, so they are only meaningful alongside that array.
+ */
+struct Segment {
+  /** Index of the segment's first sample. */
+  std::size_t first = 0;
+  /** Index of the segment's last sample, inclusive. */
+  std::size_t last = 0;
+  /** Timestamp of the first sample, in seconds. */
+  double start = 0.0;
+  /** Timestamp of the last sample, in seconds. */
+  double end = 0.0;
+
+  /** Number of samples in the segment; never 0. */
+  std::size_t Count() const { return last - first + 1; }
+  /** Wall-clock span of the segment, in seconds. */
+  double Duration() const { return end - start; }
+  /** The segment as a selectable window. */
+  TimeRange Range() const { return TimeRange{start, end}; }
+};
+
+/**
  * A time series loaded from a WPILOG file or NT4 source, resampled onto a
  * uniform grid by its loader.
  *
@@ -171,6 +228,47 @@ struct Signal {
    * pass was invention.
    */
   void ResampleToGrid();
+
+  /**
+   * Splits @p timestamps into the stretches of logging they actually contain,
+   * cutting wherever consecutive samples are more than @ref kTrimPeriods
+   * periods apart — the same threshold @ref ResampleToGrid applies at the
+   * ends, since the end trim is this split applied to the first and last
+   * segments only.
+   *
+   * Returns an empty vector when there is nothing to segment: no samples, or
+   * a non-positive @p sampleRate, where no period exists to measure gaps
+   * against. Otherwise the result is non-empty, in time order, and covers
+   * every sample exactly once.
+   *
+   * Measured on real match logs a third of entries have dozens to thousands
+   * of segments, so this is the analysis unit — the window that gets its own
+   * grid — and not a list to put in front of the user.
+   *
+   * @param timestamps Monotonic timestamps in seconds.
+   * @param sampleRate Grid rate the gaps are measured against, from
+   *                   @ref InferSampleRate.
+   */
+  static std::vector<Segment> FindSegments(std::span<const double> timestamps,
+                                           double sampleRate);
+
+  /**
+   * Returns the samples inside @p range, resampled onto the grid that window
+   * implies, leaving this signal alone.
+   *
+   * Call this on **raw** loader samples. @ref ResampleToGrid's contract is
+   * that it measures the samples handed to it, so windowing an already-gridded
+   * signal would report the sub-window as flawless however much of the first
+   * pass was invention. The point of a window is to get a grid inferred from
+   * the data inside it rather than one inherited from a record that is mostly
+   * hole.
+   *
+   * @ref name, @ref discrete and @ref live carry over; @ref revision does not,
+   * since only the owner of a signal knows what its revisions mean. A window
+   * that catches fewer than two samples yields a signal with no inferred rate,
+   * the same state a one-sample entry lands in.
+   */
+  Signal Window(TimeRange range) const;
 };
 
 // Sampling is reported from the model rather than from the nodes because the

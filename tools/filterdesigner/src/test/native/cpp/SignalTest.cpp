@@ -20,7 +20,9 @@ using wpi::filterdesigner::ClassifySampling;
 using wpi::filterdesigner::DescribeSampling;
 using wpi::filterdesigner::GridQuality;
 using wpi::filterdesigner::SamplingSeverity;
+using wpi::filterdesigner::Segment;
 using wpi::filterdesigner::Signal;
+using wpi::filterdesigner::TimeRange;
 
 TEST_CASE("SignalTest InferSampleRateEmpty", "[filterdesigner]") {
   std::vector<double> ts;
@@ -483,6 +485,189 @@ TEST_CASE("SignalTest ResampleToGridLeavesASnappedSignalsDataAlone",
     CHECK_NEAR(s.timestamps[i], firstTimestamps[i], 1e-12);
     CHECK_DOUBLE_EQ(s.values[i], firstValues[i]);
   }
+}
+
+// --- FindSegments / Window ------------------------------------------------
+//
+// A match log is not one recording but dozens: a topic publishes while the
+// robot is enabled, goes quiet for minutes and resumes. ResampleToGrid has
+// only one grid, so it interpolates straight across those holes; segments say
+// where the recordings are, and Window is how the caller analyzes one of them
+// instead of the whole reconstruction.
+
+/** 100 Hz timestamps: @p counts samples per segment, @p gaps seconds between
+ * them. */
+std::vector<double> Bursts(std::vector<int> counts, std::vector<double> gaps) {
+  std::vector<double> ts;
+  double t = 0.0;
+  for (std::size_t b = 0; b < counts.size(); ++b) {
+    if (b > 0) {
+      t += gaps[b - 1];
+    }
+    for (int i = 0; i < counts[b]; ++i) {
+      ts.push_back(t);
+      t += 0.01;
+    }
+    t -= 0.01;
+  }
+  return ts;
+}
+
+TEST_CASE("SignalTest FindSegmentsEmptyWithoutSamples", "[filterdesigner]") {
+  std::vector<double> ts;
+  CHECK(Signal::FindSegments(ts, 100.0).empty());
+}
+
+TEST_CASE("SignalTest FindSegmentsEmptyWithoutARate", "[filterdesigner]") {
+  // No period means no scale to measure a gap against, so there is nothing
+  // to segment rather than one segment covering everything.
+  std::vector<double> ts{0.0, 1.0, 2.0};
+  CHECK(Signal::FindSegments(ts, 0.0).empty());
+}
+
+TEST_CASE("SignalTest FindSegmentsSpansContinuousDataInOne",
+          "[filterdesigner]") {
+  auto ts = Bursts({20}, {});
+  auto segments = Signal::FindSegments(ts, 100.0);
+  REQUIRE(segments.size() == 1u);
+  CHECK(segments[0].first == 0u);
+  CHECK(segments[0].last == 19u);
+  CHECK(segments[0].Count() == 20u);
+  CHECK_NEAR(segments[0].start, 0.0, 1e-12);
+  CHECK_NEAR(segments[0].end, 0.19, 1e-12);
+}
+
+TEST_CASE("SignalTest FindSegmentsSplitsAtALoggingPause", "[filterdesigner]") {
+  // 20 samples, five seconds of nothing, 10 more.
+  auto ts = Bursts({20, 10}, {5.0});
+  auto segments = Signal::FindSegments(ts, 100.0);
+  REQUIRE(segments.size() == 2u);
+  CHECK(segments[0].first == 0u);
+  CHECK(segments[0].last == 19u);
+  CHECK(segments[1].first == 20u);
+  CHECK(segments[1].last == 29u);
+  CHECK_NEAR(segments[1].start, 5.19, 1e-12);
+  CHECK_NEAR(segments[1].Duration(), 0.09, 1e-12);
+}
+
+TEST_CASE("SignalTest FindSegmentsKeepsDropoutsWithinOneSegment",
+          "[filterdesigner]") {
+  // Nine missed periods is a dropout, not a pause: kTrimPeriods is the same
+  // threshold ResampleToGrid trims the ends at, and this is inside it.
+  auto ts = Bursts({20, 10}, {0.09});
+  auto segments = Signal::FindSegments(ts, 100.0);
+  CHECK(segments.size() == 1u);
+}
+
+TEST_CASE("SignalTest FindSegmentsCoversEverySampleExactlyOnce",
+          "[filterdesigner]") {
+  auto ts = Bursts({5, 1, 12, 3}, {2.0, 0.5, 9.0});
+  auto segments = Signal::FindSegments(ts, 100.0);
+  REQUIRE(segments.size() == 4u);
+  CHECK(segments.front().first == 0u);
+  CHECK(segments.back().last == ts.size() - 1);
+  for (std::size_t i = 1; i < segments.size(); ++i) {
+    UNSCOPED_INFO("segments must abut at i=" << i);
+    CHECK(segments[i].first == segments[i - 1].last + 1);
+  }
+}
+
+TEST_CASE("SignalTest WindowOfTheWholeRecordMatchesResampleToGrid",
+          "[filterdesigner]") {
+  Signal raw = Ramp(Bursts({20, 10}, {5.0}));
+  Signal gridded = raw;
+  gridded.ResampleToGrid();
+
+  Signal windowed =
+      raw.Window(TimeRange{raw.timestamps.front(), raw.timestamps.back()});
+
+  REQUIRE(windowed.timestamps.size() == gridded.timestamps.size());
+  CHECK_DOUBLE_EQ(windowed.sampleRate, gridded.sampleRate);
+  CHECK_DOUBLE_EQ(windowed.quality.filled, gridded.quality.filled);
+  for (std::size_t i = 0; i < windowed.values.size(); ++i) {
+    UNSCOPED_INFO("i=" << i);
+    CHECK_DOUBLE_EQ(windowed.values[i], gridded.values[i]);
+  }
+}
+
+TEST_CASE("SignalTest WindowOfOneSegmentDropsTheGapFill", "[filterdesigner]") {
+  Signal raw = Ramp(Bursts({20, 20}, {5.0}));
+  auto segments = Signal::FindSegments(raw.timestamps, 100.0);
+  REQUIRE(segments.size() == 2u);
+
+  Signal whole = raw;
+  whole.ResampleToGrid();
+  UNSCOPED_INFO("the whole record is nearly all interpolant across the pause");
+  CHECK(whole.quality.filled > 0.9);
+
+  // The point of the ticket: the same data, analyzed one segment at a time,
+  // is measurement rather than reconstruction.
+  Signal second = raw.Window(segments[1].Range());
+  CHECK(second.quality.onGrid);
+  CHECK(second.values.size() == 20u);
+  CHECK_DOUBLE_EQ(second.quality.filled, 0.0);
+  CHECK_NEAR(second.sampleRate, 100.0, 1e-9);
+  CHECK_NEAR(second.quality.longestGap, 0.01, 1e-9);
+}
+
+TEST_CASE("SignalTest WindowIsClosedAtBothEnds", "[filterdesigner]") {
+  Signal raw = Ramp({0.0, 0.01, 0.02, 0.03, 0.04});
+  Signal w = raw.Window(TimeRange{0.01, 0.03});
+  REQUIRE(w.values.size() == 3u);
+  // Values are sample indices, so these name the samples that were kept.
+  CHECK_DOUBLE_EQ(w.values.front(), 1.0);
+  CHECK_DOUBLE_EQ(w.values.back(), 3.0);
+}
+
+TEST_CASE("SignalTest WindowOutsideTheRecordKeepsNothing", "[filterdesigner]") {
+  Signal raw = Ramp(Bursts({20}, {}));
+  Signal w = raw.Window(TimeRange{10.0, 20.0});
+  CHECK(w.values.empty());
+  CHECK(w.sampleRate == 0.0);
+  CHECK_FALSE(w.quality.onGrid);
+}
+
+TEST_CASE("SignalTest WindowOfAnInvertedRangeKeepsNothing",
+          "[filterdesigner]") {
+  Signal raw = Ramp(Bursts({20}, {}));
+  CHECK(raw.Window(TimeRange{0.15, 0.05}).values.empty());
+}
+
+TEST_CASE("SignalTest WindowOfASinglePointKeepsTheSampleOnIt",
+          "[filterdesigner]") {
+  // A zero-width window is not an empty one — it is what a one-sample entry's
+  // whole record looks like, and it must still publish that sample.
+  Signal raw = Ramp({0.0, 0.01, 0.02});
+  Signal w = raw.Window(TimeRange{0.01, 0.01});
+  REQUIRE(w.values.size() == 1u);
+  CHECK_DOUBLE_EQ(w.values[0], 1.0);
+  UNSCOPED_INFO("one sample infers no rate, same as a one-sample entry");
+  CHECK(w.sampleRate == 0.0);
+}
+
+TEST_CASE("SignalTest WindowCarriesTheSourceMetadataButNotItsRevision",
+          "[filterdesigner]") {
+  Signal raw = Ramp({0.0, 0.01, 0.02, 0.03});
+  raw.name = "/gate";
+  raw.discrete = true;
+  raw.live = true;
+  raw.revision = 42;
+
+  Signal w = raw.Window(TimeRange{0.0, 0.03});
+  CHECK(w.name == "/gate");
+  CHECK(w.discrete);
+  CHECK(w.live);
+  UNSCOPED_INFO("only the owner of a signal knows what its revisions mean");
+  CHECK(w.revision == 0u);
+}
+
+TEST_CASE("SignalTest WindowLeavesTheSourceSignalAlone", "[filterdesigner]") {
+  Signal raw = Ramp(Bursts({20, 20}, {5.0}));
+  const std::vector<double> before = raw.timestamps;
+  raw.Window(TimeRange{5.19, 5.38});
+  CHECK(raw.timestamps == before);
+  UNSCOPED_INFO("the raw copy stays raw, so the next window measures data");
+  CHECK_FALSE(raw.quality.onGrid);
 }
 
 TEST_CASE("SignalTest GridQualityExactDescribesGeneratedSignal",

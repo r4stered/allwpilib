@@ -115,6 +115,49 @@ TEST_CASE_METHOD(WpiLogSourceTest,
 }
 
 TEST_CASE_METHOD(WpiLogSourceTest,
+                 "WpiLogSourceTest LoadEntryRawLeavesTheSamplesAsLogged",
+                 "[filterdesigner]") {
+  // Jittered timestamps around 100 Hz with one dropped sample. LoadEntry
+  // resamples that onto a grid; LoadEntryRaw is what a time-range selection
+  // has to cut from, so it must hand back exactly what was written.
+  wpi::log::DoubleLogEntry d{log, "raw", 0};
+  d.Append(1.0, 10'000'000);
+  d.Append(2.0, 20'400'000);
+  d.Append(3.0, 29'700'000);
+  d.Append(4.0, 50'100'000);
+  log.Flush();
+
+  auto src = WpiLogSource::FromBuffer(data);
+  REQUIRE(src.has_value());
+  auto raw = src->LoadEntryRaw("raw");
+  REQUIRE(raw.has_value());
+  REQUIRE(raw->timestamps.size() == 4u);
+  CHECK_NEAR(raw->timestamps[1], 0.0204, 1e-12);
+  CHECK_NEAR(raw->timestamps[3], 0.0501, 1e-12);
+  UNSCOPED_INFO("no grid was inferred, because none was built");
+  CHECK(raw->sampleRate == 0.0);
+  CHECK_FALSE(raw->quality.onGrid);
+
+  auto gridded = src->LoadEntry("raw");
+  REQUIRE(gridded.has_value());
+  CHECK(gridded->quality.onGrid);
+  CHECK(gridded->timestamps.size() > raw->timestamps.size());
+}
+
+TEST_CASE_METHOD(WpiLogSourceTest,
+                 "WpiLogSourceTest LoadEntryRawRejectsWhatLoadEntryRejects",
+                 "[filterdesigner]") {
+  wpi::log::StringLogEntry s{log, "text", 0};
+  s.Append("hello", 1'000);
+  log.Flush();
+
+  auto src = WpiLogSource::FromBuffer(data);
+  REQUIRE(src.has_value());
+  CHECK_FALSE(src->LoadEntryRaw("text").has_value());
+  CHECK_FALSE(src->LoadEntryRaw("nonexistent").has_value());
+}
+
+TEST_CASE_METHOD(WpiLogSourceTest,
                  "WpiLogSourceTest LoadEntryIntegerCoercedToDouble",
                  "[filterdesigner]") {
   wpi::log::IntegerLogEntry e{log, "count", 0};

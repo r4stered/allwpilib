@@ -71,6 +71,17 @@ void WpiLogSource::ScanEntries() {
 }
 
 std::optional<Signal> WpiLogSource::LoadEntry(std::string_view name) const {
+  auto sig = LoadEntryRaw(name);
+  if (!sig) {
+    return std::nullopt;
+  }
+  // WPILOG timestamps jitter and drop out, so resample the entry onto a
+  // uniform grid rather than handing downstream a fixed-dt lie.
+  sig->ResampleToGrid();
+  return sig;
+}
+
+std::optional<Signal> WpiLogSource::LoadEntryRaw(std::string_view name) const {
   auto it = m_entryIndex.find(std::string{name});
   if (it == m_entryIndex.end() || !IsNumericType(it->second.type)) {
     return std::nullopt;
@@ -112,9 +123,6 @@ std::optional<Signal> WpiLogSource::LoadEntry(std::string_view name) const {
   // Integers stay continuous: an int64 entry is more often a count than a
   // state enum.
   sig.discrete = type == "boolean";
-  // WPILOG timestamps jitter and drop out, so resample the entry onto a
-  // uniform grid rather than handing downstream a fixed-dt lie.
-  sig.ResampleToGrid();
   return sig;
 }
 

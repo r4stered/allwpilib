@@ -53,10 +53,24 @@ class WpiLogSource {
   const std::vector<LogEntry>& Entries() const { return m_entries; }
 
   /**
-   * Loads the timeseries for an entry. Returns std::nullopt if no entry by
-   * that name exists or the entry is non-numeric.
+   * Loads the timeseries for an entry, resampled onto its inferred uniform
+   * grid. Returns std::nullopt if no entry by that name exists or the entry
+   * is non-numeric.
    */
   std::optional<Signal> LoadEntry(std::string_view name) const;
+
+  /**
+   * Loads an entry's samples exactly as logged — jittered timestamps, holes
+   * and all — without resampling.
+   *
+   * This is the form a time-range selection has to window: @ref
+   * Signal::ResampleToGrid measures whatever it is handed, so slicing an
+   * already-gridded signal would report the slice as flawless however much of
+   * the grid under it was interpolant. Callers that window are also the reason
+   * this is separate rather than a re-load: a scan costs O(records) whatever
+   * one entry it is after, so the raw samples are worth holding onto.
+   */
+  std::optional<Signal> LoadEntryRaw(std::string_view name) const;
 
  private:
   struct EntryInfo {

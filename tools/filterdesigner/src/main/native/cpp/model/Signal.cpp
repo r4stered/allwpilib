@@ -181,6 +181,53 @@ void Signal::ResampleToGrid() {
   values = std::move(gridValues);
 }
 
+std::vector<Segment> Signal::FindSegments(std::span<const double> timestamps,
+                                          double sampleRate) {
+  std::vector<Segment> segments;
+  if (timestamps.empty() || sampleRate <= 0.0) {
+    return segments;
+  }
+  const double cut = kTrimPeriods / sampleRate;
+  std::size_t first = 0;
+  for (std::size_t i = 1; i < timestamps.size(); ++i) {
+    if (timestamps[i] - timestamps[i - 1] <= cut) {
+      continue;
+    }
+    segments.push_back(
+        Segment{first, i - 1, timestamps[first], timestamps[i - 1]});
+    first = i;
+  }
+  const std::size_t last = timestamps.size() - 1;
+  segments.push_back(Segment{first, last, timestamps[first], timestamps[last]});
+  return segments;
+}
+
+Signal Signal::Window(TimeRange range) const {
+  Signal out;
+  out.name = name;
+  out.discrete = discrete;
+  out.live = live;
+  const std::size_t count = std::min(timestamps.size(), values.size());
+  if (count == 0 || range.Empty()) {
+    return out;
+  }
+  // Timestamps are in order, so the window is a contiguous run. Closed at
+  // both ends: a marker parked exactly on a sample should catch it rather
+  // than depend on which side of the comparison it lands.
+  const auto begin = timestamps.begin();
+  const auto lo = std::lower_bound(begin, begin + count, range.start);
+  const auto hi = std::upper_bound(lo, begin + count, range.end);
+  const std::size_t first = static_cast<std::size_t>(lo - begin);
+  const std::size_t kept = static_cast<std::size_t>(hi - lo);
+  out.timestamps.assign(timestamps.begin() + first,
+                        timestamps.begin() + first + kept);
+  out.values.assign(values.begin() + first, values.begin() + first + kept);
+  // One resample, over the sliced raw samples: the window's rate and its fill
+  // fraction both describe what is inside it, not what the whole record cost.
+  out.ResampleToGrid();
+  return out;
+}
+
 SamplingSeverity ClassifySampling(const Signal& signal) {
   const GridQuality& quality = signal.quality;
   if (signal.sampleRate <= 0.0 || !quality.onGrid ||

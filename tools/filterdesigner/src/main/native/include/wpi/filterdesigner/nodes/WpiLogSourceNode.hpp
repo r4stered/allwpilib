@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
+#include "wpi/filterdesigner/model/Signal.hpp"
 #include "wpi/filterdesigner/nodes/WpiLogSourceNodeLogic.hpp"
 #include "wpi/util/json.hpp"
 
@@ -21,12 +22,16 @@ class NodeRegistry;
 
 /**
  * Source node that reads numeric entries out of a WPILOG file and exposes
- * the picked entry on its "out" pin as a `const Signal*`.
+ * the picked entry, restricted to a user-chosen time window, on its "out" pin
+ * as a `const Signal*`.
  *
  * Pin shape: — → out (const Signal*)
  *
  * Pure state lives in @ref WpiLogSourceNodeLogic; this class is just the
- * ImNodeFlow + ImGui shell.
+ * ImNodeFlow + ImGui shell. The one piece of state that lives here is the
+ * in-flight marker drag: the window is committed to the logic on mouse
+ * release rather than per frame, because each commit re-slices and resamples
+ * the entry and bumps the revision every downstream cache keys on.
  */
 class WpiLogSourceNode final : public FilterDesignerNode {
  public:
@@ -47,11 +52,37 @@ class WpiLogSourceNode final : public FilterDesignerNode {
 
  private:
   void PollFileDialog();
+  /** Everything the node draws, wrapped by @ref draw so its width can be
+   * measured. */
+  void DrawBody();
+  /** Draws the segment-shaded timeline strip and its two markers. */
+  void DrawTimeline();
 
   // Held by unique_ptr so the OutPin behaviour lambda can safely capture a
   // raw pointer — non-copyable, stable address across the node's lifetime.
   std::unique_ptr<WpiLogSourceNodeLogic> m_logic;
   std::unique_ptr<pfd::open_file> m_opener;
+
+  /** Where the markers are right now — the logic's window except mid-drag. */
+  TimeRange m_pending;
+  /** True while a marker or a new-window drag is live, so the window commits
+   * once on release. */
+  bool m_dragging = false;
+  /** True while a left-drag across open strip is drawing a new window. */
+  bool m_selecting = false;
+  /** Where that drag started, in seconds. The other edge is the cursor, so
+   * one gesture names both and neither is ever the ambiguous one. */
+  double m_selectAnchor = 0.0;
+  /** Record span the timeline's x-axis was last fitted to. Refitting when it
+   * changes is what keeps picking a differently-timed entry from leaving the
+   * view somewhere the new data isn't. */
+  TimeRange m_fittedSpan;
+  /** Width of everything the node drew last frame. The timeline stretches to
+   * it, which is the only way to fill a node whose width is decided by its
+   * widest row and so is not known until after @ref draw returns. Settles in
+   * two frames: the strip can only ever match the widest row, never widen
+   * past it. */
+  float m_contentWidth = 0.0f;
 };
 
 }  // namespace wpi::filterdesigner

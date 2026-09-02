@@ -18,13 +18,30 @@ namespace wpi::filterdesigner {
 
 /**
  * Pure (UI-free) state of a WpiLogSourceNode: a loaded log, the currently
- * picked entry, and the cached @ref Signal that the node's output pin
- * exposes. Designed to be unit-tested without ImGui.
+ * picked entry, the time window selected within it, and the cached
+ * @ref Signal that the node's output pin exposes. Designed to be unit-tested
+ * without ImGui.
  *
  * The node UI calls @ref OpenFile when the user picks a .wpilog through the
  * file dialog, and @ref RestoreFromPath on graph load. Both share the
  * underlying open path, but the restore path is silent on failure (the node
  * renders an "needs re-pick" banner instead of throwing a dialog).
+ *
+ * **Raw samples and the published window.** A picked entry is held twice: as
+ * @ref RawSignal, the samples exactly as logged, and as @ref Signal, the
+ * selected window of those samples resampled onto its own uniform grid. Every
+ * window is cut from the raw copy and resampled once — never from a previous
+ * window's grid, which would report the slice as flawless however much of the
+ * grid beneath it was interpolant. Holding the raw copy is also what keeps a
+ * marker drag off the O(records) log scan @ref WpiLogSource::LoadEntryRaw
+ * costs.
+ *
+ * The window starts as the whole record, so picking an entry publishes what
+ * it published before time ranges existed. A real match log's median entry is
+ * 40% interpolated at that setting and its longest segment is a third of the
+ * span, so narrowing is usually the right move — but it discards more than
+ * half the samples, which makes it the user's call. @ref SelectLongestSegment
+ * is the one-click version.
  */
 class WpiLogSourceNodeLogic {
  public:
@@ -62,6 +79,63 @@ class WpiLogSourceNodeLogic {
    */
   bool SelectEntry(std::string_view name);
 
+  /**
+   * Narrows the published window to @p range, clamped to the record.
+   *
+   * The window is cut from the raw samples and resampled onto the grid that
+   * window implies, so a selection inside one segment gets a rate and a fill
+   * fraction describing itself rather than the whole record's. The published
+   * @ref Signal is reseated and its revision bumped — see the borrow contract
+   * on @ref Signal.
+   *
+   * Callers driving this from a live drag should commit on release rather
+   * than per frame: every call re-slices, re-resamples and invalidates every
+   * downstream cache keyed on revision.
+   *
+   * @return false, leaving the selection alone, when no entry is picked or
+   *         when @p range clamps to nothing (inverted, or entirely outside
+   *         the record).
+   */
+  bool SelectRange(TimeRange range);
+
+  /** Widens the published window back to the whole record. No-op with no
+   * entry picked. */
+  void SelectFullRange();
+
+  /**
+   * Narrows the published window to the longest stretch of uninterrupted
+   * logging — longest by wall-clock span, which is what "longest" means on
+   * the node's timeline. Ties go to the earliest.
+   *
+   * @return false when the entry has no segments to pick from, i.e. when no
+   *         sample rate could be inferred and there is no period to measure
+   *         gaps against.
+   */
+  bool SelectLongestSegment();
+
+  /** Full time span of the picked entry's raw samples; a zero-width range at
+   * the origin when nothing is picked. */
+  TimeRange FullRange() const;
+
+  /** The window currently published, within @ref FullRange. */
+  const TimeRange& SelectedRange() const { return m_range; }
+
+  /** Stretches of uninterrupted logging in the picked entry, in time order.
+   * Empty when nothing is picked or no rate could be inferred. */
+  std::span<const Segment> Segments() const { return m_segments; }
+
+  /**
+   * The picked entry's samples as logged, before windowing and resampling —
+   * what the node's timeline draws so the user can see where the data is.
+   * nullptr when nothing is picked.
+   *
+   * Reseated by the same mutators as @ref Signal and under the same
+   * single-frame borrow contract.
+   */
+  const wpi::filterdesigner::Signal* RawSignal() const {
+    return m_rawSignal.has_value() ? &*m_rawSignal : nullptr;
+  }
+
   /** Clears the loaded signal but keeps the open log + path. */
   void ClearSelection();
 
@@ -82,7 +156,8 @@ class WpiLogSourceNodeLogic {
    *
    * **Single-frame borrow contract.** The pointer is only valid until the
    * next mutator on this logic — @ref OpenFile / @ref OpenBuffer /
-   * @ref SelectEntry / @ref RestoreFromPath / @ref Reset all reseat the
+   * @ref SelectEntry / @ref RestoreFromPath / @ref Reset and the three
+   * window setters all reseat the
    * underlying @c std::optional<Signal> in place, which destroys the old
    * @c Signal and frees its `values` / `timestamps` buffers. Downstream
    * sinks that pull this pointer through an ImNodeFlow OutPin must consume
@@ -103,9 +178,16 @@ class WpiLogSourceNodeLogic {
   void Reset();
 
  private:
+  /** Re-cuts @ref m_selectedSignal from @ref m_rawSignal at @ref m_range and
+   * bumps its revision. */
+  void Republish();
+
   std::optional<WpiLogSource> m_source;
   std::string m_logPath;
   std::string m_selectedName;
+  std::optional<wpi::filterdesigner::Signal> m_rawSignal;
+  std::vector<Segment> m_segments;
+  TimeRange m_range;
   std::optional<wpi::filterdesigner::Signal> m_selectedSignal;
   std::string m_loadError;
   std::uint64_t m_revisionCounter = 0;
