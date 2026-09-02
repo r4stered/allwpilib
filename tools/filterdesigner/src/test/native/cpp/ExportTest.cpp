@@ -211,8 +211,7 @@ TEST_CASE("ExportBuildContentsTest PythonHasSnakeCaseFunctionAndImport",
                                      "ShooterFilter", SimpleSpec());
   CHECK(out.find("# DO NOT EDIT") != std::string::npos);
   CHECK(out.find("# Sample rate: 1000 Hz") != std::string::npos);
-  CHECK(out.find("from wpimath import BiquadFilter") !=
-        std::string::npos);
+  CHECK(out.find("from wpimath import BiquadFilter") != std::string::npos);
   CHECK(out.find("def shooter_filter() -> BiquadFilter") != std::string::npos);
   CHECK(out.find("BiquadFilter.Section(b0=") != std::string::npos);
 }

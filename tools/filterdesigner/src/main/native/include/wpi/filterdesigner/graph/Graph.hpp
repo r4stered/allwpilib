@@ -136,7 +136,7 @@ class Graph {
   void RecomputeCycleError();
 
   /**
-   * True iff the cursor is over any node's rect. Used by @ref Update to
+   * True if the cursor is over any node's rect. Used by @ref Update to
    * route the wheel to a plot inside a hovered node rather than letting
    * the editor zoom the grid. Always false in test builds since the check
    * needs a live ImGui frame.

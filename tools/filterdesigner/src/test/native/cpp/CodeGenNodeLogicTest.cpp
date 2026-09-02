@@ -62,8 +62,7 @@ TEST_CASE("CodeGenNodeLogicTest PythonLangSelectsPythonEmitter",
   logic.lang = Language::Python;
   DesignedFilter f = MakeFilter();
   std::string out = logic.Generate(&f);
-  CHECK(out.find("from wpimath import BiquadFilter") !=
-        std::string::npos);
+  CHECK(out.find("from wpimath import BiquadFilter") != std::string::npos);
 }
 
 TEST_CASE("CodeGenNodeLogicTest VarNameAppearsInEmittedCode",

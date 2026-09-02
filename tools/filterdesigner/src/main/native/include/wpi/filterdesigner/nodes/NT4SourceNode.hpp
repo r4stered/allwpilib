@@ -57,7 +57,7 @@ class NT4SourceNode final : public FilterDesignerNode {
   NT4SourceNodeLogic& Logic() { return *m_logic; }
 
   /**
-   * True iff the wrapped @c NetworkTableInstance has been allocated. Stays
+   * True if the wrapped @c NetworkTableInstance has been allocated. Stays
    * false from construction through the first Connect click; tests rely on
    * this to assert the lazy-allocation contract (so test fixtures that
    * just construct the node don't leak ntcore handles).
