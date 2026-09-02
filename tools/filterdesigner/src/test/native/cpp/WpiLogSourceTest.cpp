@@ -284,19 +284,6 @@ TEST_CASE_METHOD(WpiLogSourceTest,
   CHECK_FALSE(src->LoadEntry("absent").has_value());
 }
 
-TEST_CASE_METHOD(WpiLogSourceTest, "WpiLogSourceTest EntriesExposeCachedLabel",
-                 "[filterdesigner]") {
-  wpi::log::DoubleLogEntry d{log, "/accel/x", 0};
-  d.Append(1.0, 1'000);
-  log.Flush();
-
-  auto src = WpiLogSource::FromBuffer(data);
-  REQUIRE(src.has_value());
-  const auto& entries = src->Entries();
-  REQUIRE(entries.size() == 1u);
-  CHECK(entries[0].label == "/accel/x  [double]");
-}
-
 TEST_CASE_METHOD(WpiLogSourceTest,
                  "WpiLogSourceTest LoadEntryPopulatesCachedSampleRate",
                  "[filterdesigner]") {

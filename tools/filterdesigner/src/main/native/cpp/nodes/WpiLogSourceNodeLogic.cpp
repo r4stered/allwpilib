@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace wpi::filterdesigner {
 
@@ -27,25 +28,37 @@ std::optional<TimeRange> Clamp(TimeRange range, TimeRange bounds) {
 
 }  // namespace
 
-void WpiLogSourceNodeLogic::Reset() {
-  m_source.reset();
-  m_logPath.clear();
+void WpiLogSourceNodeLogic::SetSource(std::optional<WpiLogSource> source) {
+  m_source = std::move(source);
+  // The tree is a view of the entry list, so it is rebuilt with the list and
+  // never separately — a stale tree would offer entries this log has not got.
+  std::vector<NameTreeItem> items;
+  if (m_source) {
+    items.reserve(m_source->Entries().size());
+    for (const auto& entry : m_source->Entries()) {
+      items.push_back({entry.name, entry.type, entry.numeric});
+    }
+  }
+  m_entryTree = BuildNameTree(items);
   ClearSelection();
+}
+
+void WpiLogSourceNodeLogic::Reset() {
+  SetSource(std::nullopt);
+  m_logPath.clear();
   m_loadError.clear();
 }
 
 bool WpiLogSourceNodeLogic::OpenFile(std::string_view path) {
   auto src = WpiLogSource::FromFile(path);
   if (!src) {
-    m_source.reset();
+    SetSource(std::nullopt);
     m_logPath = std::string{path};
-    ClearSelection();
     m_loadError = "Failed to open: " + std::string{path};
     return false;
   }
-  m_source = std::move(src);
+  SetSource(std::move(src));
   m_logPath = std::string{path};
-  ClearSelection();
   m_loadError.clear();
   return true;
 }
@@ -53,15 +66,13 @@ bool WpiLogSourceNodeLogic::OpenFile(std::string_view path) {
 bool WpiLogSourceNodeLogic::OpenBuffer(std::span<const uint8_t> buffer) {
   auto src = WpiLogSource::FromBuffer(buffer);
   if (!src) {
-    m_source.reset();
+    SetSource(std::nullopt);
     m_logPath.clear();
-    ClearSelection();
     m_loadError = "Failed to open buffer";
     return false;
   }
-  m_source = std::move(src);
+  SetSource(std::move(src));
   m_logPath.clear();
-  ClearSelection();
   m_loadError.clear();
   return true;
 }
@@ -69,20 +80,19 @@ bool WpiLogSourceNodeLogic::OpenBuffer(std::span<const uint8_t> buffer) {
 void WpiLogSourceNodeLogic::RestoreFromPath(std::string_view path,
                                             std::string_view selectedEntry) {
   m_logPath = std::string{path};
-  ClearSelection();
   if (path.empty()) {
-    m_source.reset();
+    SetSource(std::nullopt);
     m_loadError.clear();
     return;
   }
   auto src = WpiLogSource::FromFile(path);
   if (!src) {
-    m_source.reset();
+    SetSource(std::nullopt);
     m_loadError =
         "Saved log not found: " + std::string{path} + " — re-pick the file.";
     return;
   }
-  m_source = std::move(src);
+  SetSource(std::move(src));
   m_loadError.clear();
   if (!selectedEntry.empty()) {
     // Best-effort: if the entry no longer exists in the log, leave the

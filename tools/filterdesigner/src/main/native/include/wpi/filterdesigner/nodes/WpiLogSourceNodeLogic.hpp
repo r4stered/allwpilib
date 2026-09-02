@@ -13,6 +13,7 @@
 
 #include "wpi/filterdesigner/io/WpiLogSource.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
+#include "wpi/filterdesigner/nodes/NameTree.hpp"
 
 namespace wpi::filterdesigner {
 
@@ -174,6 +175,17 @@ class WpiLogSourceNodeLogic {
   /** All entries in the log (numeric + non-numeric). Empty when no log. */
   std::span<const LogEntry> Entries() const;
 
+  /**
+   * The same entries filed into a path-split tree for the node's picker, with
+   * non-numeric entries marked not selectable. Rebuilt once per opened log,
+   * not per frame — a real match log has hundreds of entries and the node
+   * draws every frame.
+   *
+   * The root is a container and never names an entry; render its children.
+   * Empty when no log is open.
+   */
+  const NameTreeNode& EntryTree() const { return m_entryTree; }
+
   /** Drops everything — empty path, no log, no signal. */
   void Reset();
 
@@ -182,7 +194,16 @@ class WpiLogSourceNodeLogic {
    * bumps its revision. */
   void Republish();
 
+  /**
+   * Installs @p source as the open log and rebuilds everything derived from
+   * it — the entry tree, and the (now meaningless) selection. The only place
+   * @ref m_source is written, so a picker can never outlive the log it was
+   * built from.
+   */
+  void SetSource(std::optional<WpiLogSource> source);
+
   std::optional<WpiLogSource> m_source;
+  NameTreeNode m_entryTree;
   std::string m_logPath;
   std::string m_selectedName;
   std::optional<wpi::filterdesigner::Signal> m_rawSignal;

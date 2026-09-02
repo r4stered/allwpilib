@@ -13,6 +13,7 @@
 
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
 #include "wpi/filterdesigner/nodes/NT4SourceNodeLogic.hpp"
+#include "wpi/filterdesigner/nodes/NameTree.hpp"
 #include "wpi/nt/MultiSubscriber.hpp"
 #include "wpi/nt/NetworkTableInstance.hpp"
 #include "wpi/nt/NetworkTableListener.hpp"
@@ -76,45 +77,8 @@ class NT4SourceNode final : public FilterDesignerNode {
     std::string type;
   };
 
-  /**
-   * One node in the path-split topic tree. A non-empty @ref fullPath means
-   * the node names a real NT topic (with @ref type set) and is selectable; a
-   * non-empty @ref children means it has descendants. Both can hold at once,
-   * since NT allows a topic at `/foo` alongside `/foo/bar`.
-   */
-  struct TopicTreeNode {
-    std::string name;
-    std::string fullPath;
-    std::string type;
-    std::vector<TopicTreeNode> children;
-  };
-
   /** Rebuilds @ref m_topicTree from the flat @ref m_topics list. */
   void RebuildTopicTree();
-
-  /**
-   * Renders one node of the tree (recursive). Selecting a node that names a
-   * topic calls Subscribe with its fullPath; the popup combo closes via
-   * Selectable's default behaviour. A node that both names a topic and has
-   * children renders its selectable row and its subtree.
-   *
-   * @param node Current tree node.
-   * @param forceOpen When true, branches use @c ImGuiTreeNodeFlags_DefaultOpen
-   *                  so an active search filter shows every surviving
-   *                  subtree expanded by default.
-   * @param matchesSearch When the live search is non-empty, topics are
-   *                      filtered out if @c node.fullPath doesn't contain
-   *                      the search substring; branches are pruned if no
-   *                      descendant matches.
-   */
-  void RenderTopicTreeNode(const TopicTreeNode& node, bool forceOpen);
-
-  /**
-   * True if @p node or any descendant's @c fullPath contains the
-   * current case-insensitive @ref m_topicSearch substring. Empty search
-   * always returns true (everything is shown).
-   */
-  bool TopicTreeNodeMatchesSearch(const TopicTreeNode& node) const;
 
   // Held by unique_ptr so the OutPin behaviour + drain lambdas can capture a
   // raw pointer with stable address.
@@ -124,7 +88,7 @@ class NT4SourceNode final : public FilterDesignerNode {
   bool m_clientStarted = false;
 
   std::vector<TopicEntry> m_topics;
-  TopicTreeNode m_topicTree;
+  NameTreeNode m_topicTree;
   std::string m_topicSearch;
 
   // Subscriber for the selected topic. Held by unique_ptr so we can drop it

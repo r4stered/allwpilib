@@ -22,9 +22,6 @@ struct LogEntry {
   std::string name;
   std::string type;
   bool numeric;
-  /** Pre-formatted "name  [type]" — cached so the UI doesn't rebuild it every
-   * frame when rendering the entries list. */
-  std::string label;
 };
 
 /**

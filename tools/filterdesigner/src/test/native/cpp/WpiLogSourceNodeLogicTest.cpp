@@ -9,17 +9,21 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "NameTreeSupport.hpp"
 #include "TestAssertions.hpp"
 #include "wpi/datalog/DataLogWriter.hpp"
+#include "wpi/filterdesigner/nodes/NameTree.hpp"
 #include "wpi/util/Logger.hpp"
 #include "wpi/util/raw_ostream.hpp"
 
 namespace {
 
+using wpi::filterdesigner::NameTreeNode;
 using wpi::filterdesigner::TimeRange;
 using wpi::filterdesigner::WpiLogSourceNodeLogic;
 
@@ -467,6 +471,80 @@ TEST_CASE_METHOD(WpiLogSourceNodeLogicTest,
   UNSCOPED_INFO("a window into one entry means nothing in another");
   CHECK(logic.SelectedRange() == logic.FullRange());
   CHECK(logic.Signal()->values.size() == 2u);
+}
+
+TEST_CASE_METHOD(WpiLogSourceNodeLogicTest,
+                 "WpiLogSourceNodeLogicTest EntryTreeIsEmptyWithNoLog",
+                 "[filterdesigner]") {
+  WpiLogSourceNodeLogic logic;
+  CHECK(logic.EntryTree().children.empty());
+}
+
+TEST_CASE_METHOD(WpiLogSourceNodeLogicTest,
+                 "WpiLogSourceNodeLogicTest EntryTreeFilesEveryEntryByPath",
+                 "[filterdesigner]") {
+  wpi::log::DoubleLogEntry velocity{log, "NT:/Spindexer/VelocityRPM", 0};
+  wpi::log::DoubleLogEntry current{log, "NT:/Spindexer/Current", 0};
+  wpi::log::StringLogEntry state{log, "NT:/Spindexer/State", 0};
+  velocity.Append(1.0, 1'000'000);
+  current.Append(2.0, 1'000'000);
+  state.Append("idle", 1'000'000);
+  log.Flush();
+
+  WpiLogSourceNodeLogic logic;
+  REQUIRE(logic.OpenBuffer(data));
+
+  const NameTreeNode* nt = FindChild(logic.EntryTree(), "NT");
+  REQUIRE(nt != nullptr);
+  const NameTreeNode* spindexer = FindChild(*nt, "Spindexer");
+  REQUIRE(spindexer != nullptr);
+  REQUIRE(spindexer->children.size() == 3);
+
+  const NameTreeNode* velocityNode = FindChild(*spindexer, "VelocityRPM");
+  REQUIRE(velocityNode != nullptr);
+  CHECK(velocityNode->fullPath == "NT:/Spindexer/VelocityRPM");
+  CHECK(velocityNode->type == "double");
+  CHECK(velocityNode->selectable);
+
+  UNSCOPED_INFO(
+      "non-numeric entries stay listed, greyed, as the flat combo "
+      "showed them");
+  const NameTreeNode* stateNode = FindChild(*spindexer, "State");
+  REQUIRE(stateNode != nullptr);
+  CHECK_FALSE(stateNode->selectable);
+}
+
+TEST_CASE_METHOD(WpiLogSourceNodeLogicTest,
+                 "WpiLogSourceNodeLogicTest EntryTreeIsDroppedOnReset",
+                 "[filterdesigner]") {
+  wpi::log::DoubleLogEntry d{log, "/accel/x", 0};
+  d.Append(1.0, 1'000'000);
+  log.Flush();
+
+  WpiLogSourceNodeLogic logic;
+  REQUIRE(logic.OpenBuffer(data));
+  REQUIRE_FALSE(logic.EntryTree().children.empty());
+
+  logic.Reset();
+  CHECK(logic.EntryTree().children.empty());
+}
+
+TEST_CASE_METHOD(WpiLogSourceNodeLogicTest,
+                 "WpiLogSourceNodeLogicTest EntryTreeIsDroppedWhenAnOpenFails",
+                 "[filterdesigner]") {
+  wpi::log::DoubleLogEntry d{log, "/accel/x", 0};
+  d.Append(1.0, 1'000'000);
+  log.Flush();
+
+  WpiLogSourceNodeLogic logic;
+  REQUIRE(logic.OpenBuffer(data));
+  REQUIRE_FALSE(logic.EntryTree().children.empty());
+
+  UNSCOPED_INFO(
+      "a picker still showing the previous log's entries would "
+      "offer selections that cannot load");
+  CHECK_FALSE(logic.OpenFile("/nonexistent/does-not-exist.wpilog"));
+  CHECK(logic.EntryTree().children.empty());
 }
 
 }  // namespace

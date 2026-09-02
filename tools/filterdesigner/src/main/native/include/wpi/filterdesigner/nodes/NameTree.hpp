@@ -1,0 +1,87 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+#pragma once
+
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace wpi::filterdesigner {
+
+/**
+ * One flat name to file into a @ref NameTreeNode tree — an NT topic, or a
+ * wpilog entry.
+ *
+ * Non-owning: the views are only read during @ref BuildNameTree, which copies
+ * whatever it keeps, so they need only outlive that one call and may point
+ * straight into the caller's own entry or topic list.
+ */
+struct NameTreeItem {
+  /** Full name, as the source spells it: "NT:/Spindexer/VelocityRPM". */
+  std::string_view name;
+  /** Short type label shown beside the leaf, e.g. "double". */
+  std::string_view type;
+  /** False for a name the picker should show greyed out and refuse — a
+   * non-numeric wpilog entry. */
+  bool selectable = true;
+};
+
+/**
+ * One node of a path-split name tree. A non-empty @ref fullPath means the
+ * node names a real item (with @ref type and @ref selectable set) and gets a
+ * selectable row; a non-empty @ref children means it has descendants. Both
+ * can hold at once, since a source may carry an item at `/foo` alongside
+ * `/foo/bar`.
+ */
+struct NameTreeNode {
+  /** This segment alone — what the row is labelled with. */
+  std::string name;
+  /** Full name of the item this node stands for, or empty for a pure
+   * branch. */
+  std::string fullPath;
+  std::string type;
+  /** Pre-formatted "name  [type]" for the leaf's row — built once with the
+   * tree rather than per frame, which is what @c LogEntry used to cache for
+   * the flat combo. Empty for a pure branch, which renders @ref name. */
+  std::string label;
+  bool selectable = true;
+  /** Sorted by @ref name. */
+  std::vector<NameTreeNode> children;
+};
+
+/**
+ * Files every item in @p items into a tree, splitting each name on '/' — and,
+ * before that, on a leading "prefix:" if the prefix contains no '/'. That
+ * second rule is what puts `NT:/Spindexer/VelocityRPM` under `NT` /
+ * `Spindexer` / `VelocityRPM` rather than leaving the whole `NT:/Spindexer`
+ * mouthful as one segment; the guard is what stops it mangling a name whose
+ * colon is inside a path segment, like `/Shooter/ratio:1`. Both come from
+ * datalogtool's exporter, which files the same wpilog entries.
+ *
+ * Empty segments are dropped, so a leading '/' does not produce an unnamed
+ * root child, and a name that splits to nothing at all ("/", "") is skipped.
+ * Children are sorted by name at every level, so an unsorted input list — a
+ * wpilog's entries arrive in log order — still renders alphabetically.
+ *
+ * The returned root is a container: it holds children but never names an item
+ * itself. Callers render @c root.children, not the root.
+ */
+NameTreeNode BuildNameTree(std::span<const NameTreeItem> items);
+
+/**
+ * True if @p node or any descendant names an item whose full path contains
+ * @p search, case-insensitively. An empty @p search always matches, so the
+ * unfiltered tree shows everything.
+ *
+ * Matching on the full path rather than the segment is what lets a query name
+ * a parent ("spindexer") and still surface the leaves beneath it; a branch
+ * survives exactly when something under it does, which is what keeps a
+ * filtered tree navigable instead of hollow.
+ */
+bool NameTreeNodeMatchesSearch(const NameTreeNode& node,
+                               std::string_view search);
+
+}  // namespace wpi::filterdesigner

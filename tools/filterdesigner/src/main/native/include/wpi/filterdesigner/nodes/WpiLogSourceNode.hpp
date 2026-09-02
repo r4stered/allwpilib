@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <string_view>
 
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
@@ -63,6 +64,9 @@ class WpiLogSourceNode final : public FilterDesignerNode {
   std::unique_ptr<WpiLogSourceNodeLogic> m_logic;
   std::unique_ptr<pfd::open_file> m_opener;
 
+  /** Live query in the entry picker. Owned here rather than by the logic:
+   * it filters what the popup shows and never touches what is published. */
+  std::string m_entrySearch;
   /** Where the markers are right now — the logic's window except mid-drag. */
   TimeRange m_pending;
   /** True while a marker or a new-window drag is live, so the window commits

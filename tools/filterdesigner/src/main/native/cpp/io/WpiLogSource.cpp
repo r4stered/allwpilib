@@ -63,8 +63,7 @@ void WpiLogSource::ScanEntries() {
     auto [it, inserted] = m_entryIndex.try_emplace(name);
     if (inserted) {
       it->second.type = std::string{start.type};
-      m_entries.push_back({name, it->second.type, IsNumericType(start.type),
-                           name + "  [" + it->second.type + "]"});
+      m_entries.push_back({name, it->second.type, IsNumericType(start.type)});
     }
     it->second.ids.push_back(start.entry);
   }

@@ -4,7 +4,6 @@
 
 #include "wpi/filterdesigner/nodes/NT4SourceNode.hpp"
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
@@ -16,6 +15,7 @@
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/io/NT4Source.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
+#include "wpi/filterdesigner/nodes/NameTree.hpp"
 #include "wpi/nt/GenericEntry.hpp"
 #include "wpi/nt/NetworkTableType.hpp"
 #include "wpi/nt/NetworkTableValue.hpp"
@@ -25,6 +25,7 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include "wpi/filterdesigner/nodes/NameTreePicker.hpp"
 #include "wpi/filterdesigner/nodes/SamplingReadout.hpp"
 #endif
 
@@ -271,98 +272,19 @@ void NT4SourceNode::RefreshTopics() {
   for (const auto& t : info) {
     m_topics.push_back({t.name, TypeLabel(t.type)});
   }
-  std::sort(
-      m_topics.begin(), m_topics.end(),
-      [](const TopicEntry& a, const TopicEntry& b) { return a.name < b.name; });
   RebuildTopicTree();
 }
 
 void NT4SourceNode::RebuildTopicTree() {
-  // Path-split each topic on '/' (matches Glass / OutlineViewer conventions).
-  // Leading '/' produces an empty first segment which we skip. Each path
-  // walks down (or creates) branches in the tree; the final segment is the
-  // leaf, which carries the full topic path and type for selection.
-  m_topicTree = TopicTreeNode{};
+  // NT topics are already announced sorted-ish and never carry a ':' prefix,
+  // so this is BuildNameTree's plain '/' split; every topic is selectable,
+  // since the discovery subscription only ever asks for numeric types.
+  std::vector<NameTreeItem> items;
+  items.reserve(m_topics.size());
   for (const auto& t : m_topics) {
-    TopicTreeNode* cursor = &m_topicTree;
-    std::size_t start = 0;
-    while (start <= t.name.size()) {
-      std::size_t slash = t.name.find('/', start);
-      std::size_t end = slash == std::string::npos ? t.name.size() : slash;
-      std::string segment = t.name.substr(start, end - start);
-      bool isLast = slash == std::string::npos;
-      if (segment.empty()) {
-        if (isLast) {
-          break;
-        }
-        start = end + 1;
-        continue;
-      }
-      auto it = std::find_if(
-          cursor->children.begin(), cursor->children.end(),
-          [&](const TopicTreeNode& n) { return n.name == segment; });
-      if (it == cursor->children.end()) {
-        cursor->children.push_back(TopicTreeNode{segment, "", "", {}});
-        it = cursor->children.end() - 1;
-      }
-      if (isLast) {
-        it->fullPath = t.name;
-        it->type = t.type;
-        break;
-      }
-      cursor = &*it;
-      start = end + 1;
-    }
+    items.push_back({t.name, t.type, true});
   }
-}
-
-bool NT4SourceNode::TopicTreeNodeMatchesSearch(
-    const TopicTreeNode& node) const {
-  if (m_topicSearch.empty()) {
-    return true;
-  }
-  // Case-insensitive substring match. The search query is short and the
-  // tree shallow; the per-frame cost is negligible compared to any of the
-  // node's other per-frame work.
-  auto containsCI = [](std::string_view haystack,
-                       std::string_view needle) -> bool {
-    if (needle.empty()) {
-      return true;
-    }
-    if (needle.size() > haystack.size()) {
-      return false;
-    }
-    for (std::size_t i = 0; i + needle.size() <= haystack.size(); ++i) {
-      bool match = true;
-      for (std::size_t j = 0; j < needle.size(); ++j) {
-        char h = haystack[i + j];
-        char n = needle[j];
-        if (h >= 'A' && h <= 'Z') {
-          h = static_cast<char>(h - 'A' + 'a');
-        }
-        if (n >= 'A' && n <= 'Z') {
-          n = static_cast<char>(n - 'A' + 'a');
-        }
-        if (h != n) {
-          match = false;
-          break;
-        }
-      }
-      if (match) {
-        return true;
-      }
-    }
-    return false;
-  };
-  if (!node.fullPath.empty() && containsCI(node.fullPath, m_topicSearch)) {
-    return true;
-  }
-  for (const auto& c : node.children) {
-    if (TopicTreeNodeMatchesSearch(c)) {
-      return true;
-    }
-  }
-  return false;
+  m_topicTree = BuildNameTree(items);
 }
 
 #ifndef RUNNING_FILTERDESIGNER_TESTS
@@ -436,14 +358,8 @@ void NT4SourceNode::draw() {
   const char* preview = selected.empty() ? "<pick a topic>" : selected.c_str();
   ImGui::SetNextItemWidth(kItemWidth);
   if (ImGui::BeginCombo("Topic", preview, ImGuiComboFlags_HeightLarge)) {
-    // Live search filters the tree; with a non-empty query, surviving
-    // branches default to open so matches surface without further clicks.
-    ImGui::SetNextItemWidth(-FLT_MIN);
-    ImGui::InputTextWithHint("##topicSearch", "Search...", &m_topicSearch);
-    const bool forceOpen = !m_topicSearch.empty();
-    for (const auto& child : m_topicTree.children) {
-      RenderTopicTreeNode(child, forceOpen);
-    }
+    DrawNameTreePicker(m_topicTree, m_topicSearch, m_logic->TopicName(),
+                       [this](std::string_view topic) { Subscribe(topic); });
     ImGui::EndCombo();
   }
   if (m_topics.empty()) {
@@ -475,46 +391,9 @@ void NT4SourceNode::draw() {
   }
 }
 
-void NT4SourceNode::RenderTopicTreeNode(const TopicTreeNode& node,
-                                        bool forceOpen) {
-  if (!TopicTreeNodeMatchesSearch(node)) {
-    return;
-  }
-  if (!node.fullPath.empty()) {
-    bool isSelected = node.fullPath == m_logic->TopicName();
-    std::string label = node.name + "  [" + node.type + "]";
-    // Selectable rows indent to align with branch-content level. Tree
-    // node-leaf flags would draw a disclosure arrow on a non-expandable row,
-    // which looks off — render as a regular Selectable instead.
-    ImGui::Indent();
-    if (ImGui::Selectable(label.c_str(), isSelected)) {
-      Subscribe(node.fullPath);
-    }
-    ImGui::Unindent();
-    if (isSelected) {
-      ImGui::SetItemDefaultFocus();
-    }
-  }
-  if (!node.children.empty()) {
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanFullWidth;
-    if (forceOpen) {
-      flags |= ImGuiTreeNodeFlags_DefaultOpen;
-    }
-    if (ImGui::TreeNodeEx(node.name.c_str(), flags)) {
-      for (const auto& c : node.children) {
-        RenderTopicTreeNode(c, forceOpen);
-      }
-      ImGui::TreePop();
-    }
-  }
-}
-
 #else  // RUNNING_FILTERDESIGNER_TESTS
 
 void NT4SourceNode::draw() {}
-
-void NT4SourceNode::RenderTopicTreeNode(const TopicTreeNode& /*node*/,
-                                        bool /*forceOpen*/) {}
 
 #endif  // RUNNING_FILTERDESIGNER_TESTS
 

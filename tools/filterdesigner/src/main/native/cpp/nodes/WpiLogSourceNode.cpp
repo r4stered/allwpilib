@@ -23,10 +23,12 @@
 #include <filesystem>
 #include <format>
 #include <span>
+#include <string_view>
 
 #include <imgui.h>
 #include <implot.h>
 
+#include "wpi/filterdesigner/nodes/NameTreePicker.hpp"
 #include "wpi/filterdesigner/nodes/SamplingReadout.hpp"
 #endif
 
@@ -67,6 +69,7 @@ void WpiLogSourceNode::DeserializeParams(const wpi::util::json& obj) {
   if (const auto* e = obj.lookup("entry"); e && e->is_string()) {
     entry = e->get_string();
   }
+  m_entrySearch.clear();
   m_logic->RestoreFromPath(path, entry);
 
   // After the entry, which resets the window to the whole record. A range
@@ -96,12 +99,12 @@ void WpiLogSourceNode::Register(NodeRegistry& registry) {
 
 namespace {
 
-// The strip stretches to the node's width; this is only the floor, for a node
-// whose other rows are all short. Tall enough to aim a marker at, short enough
-// that the node stays a node — the strip is an orientation and selection
-// surface, not the analysis plot. That is what wiring a Time Plot to the out
-// pin is for.
-constexpr float kMinTimelineWidth = 240.0f;
+// The entry picker and the timeline strip both stretch to the node's width;
+// this is only the floor, for a node whose other rows are all short. Tall
+// enough to aim a marker at, short enough that the node stays a node — the
+// strip is an orientation and selection surface, not the analysis plot. That
+// is what wiring a Time Plot to the out pin is for.
+constexpr float kMinContentWidth = 240.0f;
 constexpr float kTimelineHeight = 110.0f;
 // Overview points drawn per frame. A 600 s entry at 250 Hz is 150k samples
 // across a few hundred pixels, so striding down to a couple of thousand costs
@@ -197,7 +200,7 @@ void WpiLogSourceNode::DrawTimeline() {
 
   if (!ImPlot::BeginPlot(
           "##timeline",
-          ImVec2{std::max(kMinTimelineWidth, m_contentWidth), kTimelineHeight},
+          ImVec2{std::max(kMinContentWidth, m_contentWidth), kTimelineHeight},
           ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
               ImPlotFlags_NoMouseText)) {
     inputMap.Pan = savedPan;
@@ -333,6 +336,9 @@ void WpiLogSourceNode::PollFileDialog() {
   if (result.empty()) {
     return;
   }
+  // A query that survived into a different log's entry list would hide every
+  // row of it, which reads as a log that failed to open.
+  m_entrySearch.clear();
   m_logic->OpenFile(result.front());
 }
 
@@ -374,23 +380,16 @@ void WpiLogSourceNode::DrawBody() {
   auto entries = m_logic->Entries();
   ImGui::TextDisabled("Entries (%zu):", entries.size());
 
-  ImGui::SetNextItemWidth(220.0f);
+  // Same width as the timeline, for the same reason: a log's entry names run
+  // long and 220 px truncated most of them to "NT:/Spindexer/Vel...".
+  ImGui::SetNextItemWidth(std::max(kMinContentWidth, m_contentWidth));
   const char* currentLabel = m_logic->SelectedEntry().empty()
                                  ? "<none>"
                                  : m_logic->SelectedEntry().c_str();
-  if (ImGui::BeginCombo("##entry", currentLabel)) {
-    for (const auto& entry : entries) {
-      const bool selected = entry.name == m_logic->SelectedEntry();
-      if (!entry.numeric) {
-        ImGui::BeginDisabled();
-        ImGui::Selectable(entry.label.c_str(), selected);
-        ImGui::EndDisabled();
-        continue;
-      }
-      if (ImGui::Selectable(entry.label.c_str(), selected)) {
-        m_logic->SelectEntry(entry.name);
-      }
-    }
+  if (ImGui::BeginCombo("##entry", currentLabel, ImGuiComboFlags_HeightLarge)) {
+    DrawNameTreePicker(
+        m_logic->EntryTree(), m_entrySearch, m_logic->SelectedEntry(),
+        [this](std::string_view name) { m_logic->SelectEntry(name); });
     ImGui::EndCombo();
   }
 
