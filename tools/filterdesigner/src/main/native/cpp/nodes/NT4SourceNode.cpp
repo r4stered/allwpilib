@@ -472,13 +472,12 @@ void NT4SourceNode::RenderTopicTreeNode(const TopicTreeNode& node,
   if (!TopicTreeNodeMatchesSearch(node)) {
     return;
   }
-  const bool isLeaf = !node.fullPath.empty();
-  if (isLeaf) {
+  if (!node.fullPath.empty()) {
     bool isSelected = node.fullPath == m_logic->TopicName();
     std::string label = node.name + "  [" + node.type + "]";
-    // Leaves indent to align with branch-content level. Tree node-leaf
-    // flags would draw a disclosure arrow on a non-expandable row, which
-    // looks off — render as a regular Selectable instead.
+    // Selectable rows indent to align with branch-content level. Tree
+    // node-leaf flags would draw a disclosure arrow on a non-expandable row,
+    // which looks off — render as a regular Selectable instead.
     ImGui::Indent();
     if (ImGui::Selectable(label.c_str(), isSelected)) {
       Subscribe(node.fullPath);
@@ -487,17 +486,18 @@ void NT4SourceNode::RenderTopicTreeNode(const TopicTreeNode& node,
     if (isSelected) {
       ImGui::SetItemDefaultFocus();
     }
-    return;
   }
-  ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanFullWidth;
-  if (forceOpen) {
-    flags |= ImGuiTreeNodeFlags_DefaultOpen;
-  }
-  if (ImGui::TreeNodeEx(node.name.c_str(), flags)) {
-    for (const auto& c : node.children) {
-      RenderTopicTreeNode(c, forceOpen);
+  if (!node.children.empty()) {
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanFullWidth;
+    if (forceOpen) {
+      flags |= ImGuiTreeNodeFlags_DefaultOpen;
     }
-    ImGui::TreePop();
+    if (ImGui::TreeNodeEx(node.name.c_str(), flags)) {
+      for (const auto& c : node.children) {
+        RenderTopicTreeNode(c, forceOpen);
+      }
+      ImGui::TreePop();
+    }
   }
 }
 

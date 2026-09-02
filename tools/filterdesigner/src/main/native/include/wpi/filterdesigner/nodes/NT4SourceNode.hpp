@@ -77,9 +77,10 @@ class NT4SourceNode final : public FilterDesignerNode {
   };
 
   /**
-   * One node in the path-split topic tree. Branches have @ref children and
-   * empty @ref fullPath / @ref type; leaves have a non-empty @ref fullPath
-   * pointing at a real NT topic and an empty @ref children vector.
+   * One node in the path-split topic tree. A non-empty @ref fullPath means
+   * the node names a real NT topic (with @ref type set) and is selectable; a
+   * non-empty @ref children means it has descendants. Both can hold at once,
+   * since NT allows a topic at `/foo` alongside `/foo/bar`.
    */
   struct TopicTreeNode {
     std::string name;
@@ -92,15 +93,16 @@ class NT4SourceNode final : public FilterDesignerNode {
   void RebuildTopicTree();
 
   /**
-   * Renders one node of the tree (recursive). Selection of a leaf calls
-   * Subscribe with its fullPath; the popup combo closes via Selectable's
-   * default behaviour.
+   * Renders one node of the tree (recursive). Selecting a node that names a
+   * topic calls Subscribe with its fullPath; the popup combo closes via
+   * Selectable's default behaviour. A node that both names a topic and has
+   * children renders its selectable row and its subtree.
    *
    * @param node Current tree node.
    * @param forceOpen When true, branches use @c ImGuiTreeNodeFlags_DefaultOpen
    *                  so an active search filter shows every surviving
    *                  subtree expanded by default.
-   * @param matchesSearch When the live search is non-empty, leaves are
+   * @param matchesSearch When the live search is non-empty, topics are
    *                      filtered out if @c node.fullPath doesn't contain
    *                      the search substring; branches are pruned if no
    *                      descendant matches.
@@ -108,7 +110,7 @@ class NT4SourceNode final : public FilterDesignerNode {
   void RenderTopicTreeNode(const TopicTreeNode& node, bool forceOpen);
 
   /**
-   * True iff @p node or any descendant leaf's @c fullPath contains the
+   * True if @p node or any descendant's @c fullPath contains the
    * current case-insensitive @ref m_topicSearch substring. Empty search
    * always returns true (everything is shown).
    */
