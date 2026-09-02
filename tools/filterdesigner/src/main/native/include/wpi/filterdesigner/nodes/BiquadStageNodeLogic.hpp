@@ -122,6 +122,9 @@ class BiquadStageNodeLogic {
   mutable std::uint64_t m_filteredInputRev = 0;
   mutable std::uint64_t m_filteredAtFilterVersion = 0;
   mutable bool m_haveFiltered = false;
+  // Revision stamped onto the filtered output; m_filteredCache is
+  // pointer-stable, so downstream caches key on this to see recomputes.
+  mutable std::uint64_t m_outRevision = 0;
 };
 
 }  // namespace wpi::filterdesigner
