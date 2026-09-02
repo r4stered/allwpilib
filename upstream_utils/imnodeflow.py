@@ -17,9 +17,7 @@ def copy_upstream_src(wpilib_root: Path):
     # Copy public header (single file)
     copy_to([Path("include/ImNodeFlow.h")], imnodeflow)
 
-    # Copy implementation files. Upstream's include/ImNodeFlow.h reaches into
-    # ../src/ for inline templates and helper headers, so the include/ + src/
-    # split must be preserved verbatim.
+    # Copy implementation files
     walk_cwd_and_copy_if(
         lambda dp, f: dp == Path("src") and f.endswith((".cpp", ".inl", ".h")),
         imnodeflow,

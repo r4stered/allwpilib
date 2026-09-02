@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Drew Williams <williams.r.drew@gmail.com>
 Date: Wed, 26 Aug 2026 11:24:06 -0700
-Subject: [PATCH 2/3] Let left-click canvas panning work
+Subject: [PATCH 2/4] Let left-click canvas panning work
 
 ---
  include/ImNodeFlow.h  |  6 ++++++

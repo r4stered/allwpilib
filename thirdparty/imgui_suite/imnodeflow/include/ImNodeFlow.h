@@ -13,8 +13,8 @@
 #include <unordered_map>
 #include <cstdint>
 #include <imgui.h>
-#include "../src/imgui_bezier_math.h"
-#include "../src/context_wrapper.h"
+#include "imgui_bezier_math.h"
+#include "context_wrapper.h"
 
 //#define ConnectionFilter_None       [](ImFlow::Pin* out, ImFlow::Pin* in){ return true; }
 //#define ConnectionFilter_SameType   [](ImFlow::Pin* out, ImFlow::Pin* in){ return out->getDataType() == in->getDataType(); }
@@ -1259,6 +1259,6 @@ namespace ImFlow
     };
 }
 
-#include "../src/ImNodeFlow.inl"
+#include "ImNodeFlow.inl"
 
 #endif

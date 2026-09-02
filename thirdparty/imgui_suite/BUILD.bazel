@@ -73,9 +73,20 @@ cc_library(
 # IMNODEFLOW
 #----------------------------------------
 
-# Upstream's include/ImNodeFlow.h reaches into ../src/ for inline templates and
-# helper headers, so the src/ .h and .inl files must be exposed as hdrs (not
-# srcs) for relative includes to resolve in consumers' compiles.
+cc_library(
+    name = "imnodeflow_detail",
+    hdrs = glob([
+        "imnodeflow/src/**/*.h",
+        "imnodeflow/src/**/*.inl",
+    ]),
+    includes = ["imnodeflow/src"],
+    linkstatic = True,
+    strip_include_prefix = "imnodeflow/src",
+    deps = [
+        ":imgui",
+    ],
+)
+
 cc_library(
     name = "imnodeflow",
     srcs = glob(["imnodeflow/src/**/*.cpp"]),
@@ -83,12 +94,9 @@ cc_library(
     includes = ["imnodeflow/include"],
     linkstatic = True,
     strip_include_prefix = "imnodeflow/include",
-    textual_hdrs = glob([
-        "imnodeflow/src/**/*.h",
-        "imnodeflow/src/**/*.inl",
-    ]),
     deps = [
-        "//thirdparty/imgui_suite:imgui",
+        ":imgui",
+        ":imnodeflow_detail",
     ],
 )
 
@@ -149,6 +157,15 @@ pkg_files(
 )
 
 pkg_files(
+    name = "imnodeflow-detail-hdrs-pkg",
+    srcs = glob([
+        "imnodeflow/src/**/*.h",
+        "imnodeflow/src/**/*.inl",
+    ]),
+    strip_prefix = "imnodeflow/src",
+)
+
+pkg_files(
     name = "stb-hdrs-pkg",
     srcs = glob(["stb/include/**"]),
     strip_prefix = "stb/include",
@@ -165,6 +182,7 @@ pkg_zip(
     srcs = [
         "generated-fonts-hdrs-pkg",
         "imgui-hdrs-pkg",
+        "imnodeflow-detail-hdrs-pkg",
         "imnodeflow-hdrs-pkg",
         "implot-hdrs-pkg",
         "stb-hdrs-pkg",

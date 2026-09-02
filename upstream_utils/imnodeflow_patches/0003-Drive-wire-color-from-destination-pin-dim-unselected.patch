@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Drew Williams <williams.r.drew@gmail.com>
 Date: Wed, 26 Aug 2026 11:45:18 -0700
-Subject: [PATCH 3/3] Drive wire color from destination pin + dim unselected
+Subject: [PATCH 3/4] Drive wire color from destination pin + dim unselected
  wires
 
 ---
