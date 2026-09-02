@@ -31,7 +31,7 @@ Lines EmitCpp(const Sections& sections, std::string_view varName) {
 
 Lines EmitPython(const Sections& sections, std::string_view varName) {
   Lines out;
-  out.emplace_back("from wpimath.filter import BiquadFilter");
+  out.emplace_back("from wpimath import BiquadFilter");
   out.emplace_back("");
   out.push_back(std::format("{} = BiquadFilter([", varName));
   for (const Section& s : sections) {

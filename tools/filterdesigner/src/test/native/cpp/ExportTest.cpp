@@ -211,7 +211,7 @@ TEST_CASE("ExportBuildContentsTest PythonHasSnakeCaseFunctionAndImport",
                                      "ShooterFilter", SimpleSpec());
   CHECK(out.find("# DO NOT EDIT") != std::string::npos);
   CHECK(out.find("# Sample rate: 1000 Hz") != std::string::npos);
-  CHECK(out.find("from wpimath.filter import BiquadFilter") !=
+  CHECK(out.find("from wpimath import BiquadFilter") !=
         std::string::npos);
   CHECK(out.find("def shooter_filter() -> BiquadFilter") != std::string::npos);
   CHECK(out.find("BiquadFilter.Section(b0=") != std::string::npos);
@@ -282,7 +282,7 @@ TEST_CASE("ExportBuildContentsTest PythonGoldenFile", "[filterdesigner]") {
       "# Stages:\n"
       "#   1. Low pass  order=4  cutoff=50 Hz\n"
       "\n"
-      "from wpimath.filter import BiquadFilter\n"
+      "from wpimath import BiquadFilter\n"
       "\n"
       "\n"
       "def shooter_filter() -> BiquadFilter:\n"

@@ -84,7 +84,7 @@ TEST_CASE("CodeGenTest PythonEmitsWpimathFilterBiquadFilter",
           "[filterdesigner]") {
   Sections sos{{0.5, 0.25, 0.125, -0.75, 0.25}};
   std::string code = EmitCode(sos, Language::Python, "lowpass");
-  CHECK(code.find("from wpimath.filter import BiquadFilter") !=
+  CHECK(code.find("from wpimath import BiquadFilter") !=
         std::string::npos);
   CHECK(code.find("lowpass = BiquadFilter([") != std::string::npos);
   CHECK(code.find("BiquadFilter.Section(b0=0.5, b1=0.25, b2=0.125, a1=-0.75, "
@@ -123,7 +123,7 @@ TEST_CASE("CodeGenTest JavaGoldenSnippet", "[filterdesigner]") {
 TEST_CASE("CodeGenTest PythonGoldenSnippet", "[filterdesigner]") {
   Sections sos{{1.0, 0.0, 0.0, -0.5, 0.25}, {1.0, 2.0, 1.0, -0.125, 0.75}};
   constexpr std::string_view kGolden =
-      "from wpimath.filter import BiquadFilter\n"
+      "from wpimath import BiquadFilter\n"
       "\n"
       "lowpass = BiquadFilter([\n"
       "    BiquadFilter.Section(b0=1, b1=0, b2=0, a1=-0.5, a2=0.25),\n"

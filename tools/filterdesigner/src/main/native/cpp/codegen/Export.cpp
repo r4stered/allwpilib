@@ -98,7 +98,7 @@ Lines EmitPythonFile(const Sections& sections, std::string_view className,
   out.emplace_back("#");
   Append(out, PrefixLines(SplitLines(spec.description), "# "));
   out.emplace_back("");
-  out.emplace_back("from wpimath.filter import BiquadFilter");
+  out.emplace_back("from wpimath import BiquadFilter");
   out.emplace_back("");
   out.emplace_back("");
   out.push_back(std::format("def {}() -> BiquadFilter:", snake));
