@@ -27,7 +27,7 @@ TEST_CASE("ImpulseNodeLogicTest DefaultsProduceUnitImpulse",
   }
   CHECK_DOUBLE_EQ(sig->sampleRate, 1000.0);
   CHECK(sig->values.size() == 200u);
-  CHECK(sig->uniform);
+  CHECK(sig->quality.onGrid);
 }
 
 TEST_CASE("ImpulseNodeLogicTest TimestampsAreUniformlySpaced",

@@ -6,10 +6,51 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <format>
 #include <span>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace wpi::filterdesigner {
+
+namespace {
+
+// Fill fractions at which the sampling readout escalates. Below kWarnFilled
+// the reconstruction is a handful of dropped packets; above kBadFilled the
+// grid is mostly interpolant and any spectrum is an artifact of the
+// reconstruction, not of the robot.
+constexpr double kWarnFilled = 0.05;
+constexpr double kBadFilled = 0.25;
+// Jitter beyond this fraction of a period means the typical interval misses
+// the inferred period by a quarter of it — the rate barely describes the data.
+constexpr double kWarnJitter = 0.25;
+// Intervals longer than this are dropouts rather than mistimings, and are left
+// out of the jitter statistic; longestGap and filled report them instead.
+constexpr double kGapPeriods = 1.5;
+
+/** Renders a duration with a unit that keeps it to a few digits. */
+std::string FormatSeconds(double seconds) {
+  if (seconds >= 1.0) {
+    return std::format("{:.2f} s", seconds);
+  }
+  if (seconds >= 1e-3) {
+    return std::format("{:.1f} ms", seconds * 1e3);
+  }
+  return std::format("{:.0f} us", seconds * 1e6);
+}
+
+}  // namespace
+
+GridQuality GridQuality::Exact(double sampleRate) {
+  GridQuality quality;
+  if (sampleRate > 0.0) {
+    quality.onGrid = true;
+    quality.longestGap = 1.0 / sampleRate;
+  }
+  return quality;
+}
 
 double Signal::InferSampleRate(std::span<const double> timestamps) {
   if (timestamps.size() < 2) {
@@ -26,18 +67,151 @@ double Signal::InferSampleRate(std::span<const double> timestamps) {
   return period > 0.0 ? 1.0 / period : 0.0;
 }
 
-bool Signal::IsUniform(std::span<const double> timestamps, double tolerance) {
-  double rate = InferSampleRate(timestamps);
-  if (rate == 0.0) {
-    return false;
+void Signal::ResampleToGrid() {
+  quality = GridQuality{};
+  sampleRate = InferSampleRate(timestamps);
+  const std::size_t count = timestamps.size();
+  if (sampleRate <= 0.0 || values.size() != count) {
+    sampleRate = 0.0;
+    return;
   }
-  double period = 1.0 / rate;
-  for (size_t i = 1; i < timestamps.size(); ++i) {
-    if (std::abs((timestamps[i] - timestamps[i - 1]) - period) > tolerance) {
-      return false;
+  const double period = 1.0 / sampleRate;
+
+  // Walk in from both ends past samples no dropout explains. A topic that
+  // publishes once when NetworkTables connects and then goes quiet until the
+  // robot is enabled leaves one sample minutes ahead of its own data; that
+  // sample is the grid's origin, and the entry then reads as most of a record
+  // of nothing. Better than a third of the numeric entries in a real match log
+  // have that shape, and dropping the one sample takes the median entry from
+  // 71% filled to 44%.
+  //
+  // One sample at a time rather than by segment: a leading run that is dense
+  // in itself is a stretch of logging, and choosing between it and the body is
+  // the user's call, not this function's.
+  std::size_t first = 0;
+  std::size_t last = count - 1;
+  while (last - first >= 2 &&
+         timestamps[first + 1] - timestamps[first] > kTrimPeriods * period) {
+    ++first;
+  }
+  while (last - first >= 2 &&
+         timestamps[last] - timestamps[last - 1] > kTrimPeriods * period) {
+    --last;
+  }
+  const std::size_t kept = last - first + 1;
+  quality.trimmed = count - kept;
+  const double origin = timestamps[first];
+
+  // Measure the timing before deciding whether to build the grid, so the
+  // readout stays populated even when we refuse. Everything below describes
+  // the kept window: reporting the lead-in's gap alongside a grid that
+  // excludes it would describe data the caller no longer has.
+  //
+  // Jitter is the error of each interval, not each timestamp's distance from
+  // the slot it lands on. That distance is the running sum of the interval
+  // errors, so it random-walks away from any fixed grid and saturates near
+  // half a period within a few dozen samples — the same reading for good
+  // timing as for bad. Interval error stays comparable across the record.
+  std::vector<double> errors;
+  errors.reserve(kept);
+  for (std::size_t i = first + 1; i <= last; ++i) {
+    const double gap = timestamps[i] - timestamps[i - 1];
+    quality.longestGap = std::max(quality.longestGap, gap);
+    if (gap < kGapPeriods * period) {
+      errors.push_back(std::abs(gap - period) / period);
     }
   }
-  return true;
+  // The period is the median interval, so this is only empty if a caller
+  // handed us unsorted timestamps.
+  if (!errors.empty()) {
+    auto mid = errors.begin() + errors.size() / 2;
+    std::nth_element(errors.begin(), mid, errors.end());
+    quality.jitter = *mid;
+  }
+
+  // Slot counts stay in doubles so a decades-long gap can't overflow before
+  // we get a chance to reject it.
+  const double slotCount =
+      std::round((timestamps[last] - origin) / period) + 1.0;
+  quality.filled = std::max(0.0, 1.0 - static_cast<double>(kept) / slotCount);
+  if (slotCount > static_cast<double>(kMaxGridSlots) ||
+      slotCount >
+          static_cast<double>(kMaxGridExpansion) * static_cast<double>(kept)) {
+    return;
+  }
+
+  const std::size_t total = static_cast<std::size_t>(slotCount);
+  std::vector<double> gridTimestamps(total);
+  std::vector<double> gridValues(total);
+
+  // Walk the grid and the samples together, both in time order, keeping a
+  // cursor on the last sample at or before the current slot.
+  //
+  // Interpolating between that sample and the next is what spends the
+  // sub-slot part of a timestamp. Rounding to the nearest slot discards it
+  // and substitutes a quantization error uniform over half a period either
+  // way, which is larger than the jitter of a real log.
+  //
+  // A discrete signal holds instead — there is no value between false and
+  // true to interpolate to. The cursor never looks past the slot, so the hold
+  // is causal, matching what a robot reading the topic each loop would see.
+  std::size_t left = first;
+  for (std::size_t slot = 0; slot < total; ++slot) {
+    const double t = origin + static_cast<double>(slot) * period;
+    gridTimestamps[slot] = t;
+    while (left + 1 <= last && timestamps[left + 1] <= t) {
+      ++left;
+    }
+    if (discrete) {
+      gridValues[slot] = values[left];
+      continue;
+    }
+    // Interpolation needs a right-hand neighbour, so back off the final
+    // sample. Clamping covers the last slot, which floating point can land a
+    // hair past that sample, and samples sharing a timestamp.
+    const std::size_t lo = std::min(left, last - 1);
+    const double width = timestamps[lo + 1] - timestamps[lo];
+    const double alpha =
+        width > 0.0 ? std::clamp((t - timestamps[lo]) / width, 0.0, 1.0) : 0.0;
+    gridValues[slot] = values[lo] + alpha * (values[lo + 1] - values[lo]);
+  }
+
+  quality.onGrid = true;
+  timestamps = std::move(gridTimestamps);
+  values = std::move(gridValues);
+}
+
+SamplingSeverity ClassifySampling(const Signal& signal) {
+  const GridQuality& quality = signal.quality;
+  if (signal.sampleRate <= 0.0 || !quality.onGrid ||
+      quality.filled >= kBadFilled) {
+    return SamplingSeverity::Bad;
+  }
+  if (quality.filled >= kWarnFilled || quality.jitter >= kWarnJitter) {
+    return SamplingSeverity::Warn;
+  }
+  return SamplingSeverity::Ok;
+}
+
+std::string DescribeSampling(const Signal& signal) {
+  if (signal.sampleRate <= 0.0) {
+    return "sample rate unknown";
+  }
+  std::string text = signal.sampleRate >= 100.0
+                         ? std::format("{:.0f} Hz", signal.sampleRate)
+                         : std::format("{:.1f} Hz", signal.sampleRate);
+  text += std::format(", {:.1f}% filled", signal.quality.filled * 100.0);
+  text +=
+      std::format(", longest gap {}", FormatSeconds(signal.quality.longestGap));
+  if (!signal.quality.onGrid) {
+    // Nothing was dropped on this path, so the trim count stays out of it:
+    // there it says only which window the numbers above describe.
+    text += ", gap too large to resample";
+  } else if (signal.quality.trimmed > 0) {
+    text += std::format(", {} sample{} trimmed", signal.quality.trimmed,
+                        signal.quality.trimmed == 1 ? "" : "s");
+  }
+  return text;
 }
 
 }  // namespace wpi::filterdesigner

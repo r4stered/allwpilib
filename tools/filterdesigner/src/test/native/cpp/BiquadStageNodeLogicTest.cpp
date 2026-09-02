@@ -39,7 +39,7 @@ Signal SineSignal(double f, double fs, std::size_t n,
     s.values.push_back(std::sin(2.0 * std::numbers::pi * f * t));
   }
   s.sampleRate = fs;
-  s.uniform = true;
+  s.quality = wpi::filterdesigner::GridQuality::Exact(fs);
   s.revision = 1;
   return s;
 }

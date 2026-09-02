@@ -4,6 +4,7 @@
 
 #include "wpi/filterdesigner/io/NT4Source.hpp"
 
+#include <cstddef>
 #include <utility>
 #include <vector>
 
@@ -266,7 +267,37 @@ TEST_CASE("NT4SourceTest SampleRateInferredFromTimestamps",
   NT4Source source{OneShot(std::move(samples))};
   source.Update();
   CHECK_NEAR(source.GetSignal()->sampleRate, 1000.0, 1e-6);
-  CHECK(source.GetSignal()->uniform);
+  CHECK(source.GetSignal()->quality.onGrid);
+}
+
+TEST_CASE("NT4SourceTest ResamplesWindowOntoUniformGrid", "[filterdesigner]") {
+  // 1 kHz with the sample at 5 ms never reported. Values track the
+  // millisecond index, so interpolation reconstructs it exactly.
+  std::vector<NT4Source::Sample> samples;
+  for (int i = 0; i < 11; ++i) {
+    if (i == 5) {
+      continue;
+    }
+    samples.push_back({i * 1'000'000, static_cast<double>(i)});
+  }
+  NT4Source source{OneShot(std::move(samples))};
+  source.Update();
+
+  const auto* sig = source.GetSignal();
+  // SampleCount is the raw buffer; the Signal is the grid built from it.
+  CHECK(source.SampleCount() == 10u);
+  REQUIRE(sig->values.size() == 11u);
+  CHECK(sig->quality.onGrid);
+  CHECK_NEAR(sig->sampleRate, 1000.0, 1e-9);
+  // Every slot reads back what the signal actually had at that instant,
+  // including slot 5, which no record covered.
+  const std::vector<double> expected{0.0, 1.0, 2.0, 3.0, 4.0, 5.0,
+                                     6.0, 7.0, 8.0, 9.0, 10.0};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    UNSCOPED_INFO("value must be interpolated at i=" << i);
+    CHECK_NEAR(sig->values[i], expected[i], 1e-12);
+  }
+  CHECK_NEAR(sig->quality.filled, 1.0 / 11.0, 1e-12);
 }
 
 TEST_CASE("NT4SourceTest RejectsNonPositiveBufferSeconds", "[filterdesigner]") {

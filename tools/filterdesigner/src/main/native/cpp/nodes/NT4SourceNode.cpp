@@ -17,12 +17,15 @@
 #include "wpi/filterdesigner/io/NT4Source.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
 #include "wpi/nt/GenericEntry.hpp"
+#include "wpi/nt/NetworkTableType.hpp"
 #include "wpi/nt/NetworkTableValue.hpp"
 #include "wpi/nt/ntcore_c.h"
 
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 #include <imgui.h>
 #include <imgui_stdlib.h>
+
+#include "wpi/filterdesigner/nodes/SamplingReadout.hpp"
 #endif
 
 namespace wpi::filterdesigner {
@@ -247,6 +250,8 @@ void NT4SourceNode::Subscribe(std::string_view topicName) {
                               .sendAll = true,
                               .keepDuplicates = true}));
   m_logic->SetTopicName(topicName);
+  // Boolean topics are held across grid slots rather than interpolated.
+  m_logic->SetDiscrete(topic.GetType() == wpi::nt::NetworkTableType::BOOLEAN);
   m_logic->Clear();
 }
 
@@ -461,9 +466,12 @@ void NT4SourceNode::draw() {
   }
 
   ImGui::Text("%zu samples", m_logic->SampleCount());
-  if (m_logic->Source().GetSignal()->sampleRate > 0.0) {
-    ImGui::SameLine();
-    ImGui::Text("| %.1f Hz", m_logic->Source().GetSignal()->sampleRate);
+  // Own line rather than appended to the sample count: the readout is long
+  // enough that inlining it stretches the node. Gated on having samples at
+  // all rather than on a known rate — "sample rate unknown" is exactly the
+  // case the user needs told about.
+  if (m_logic->SampleCount() > 0) {
+    DrawSamplingReadout(*m_logic->Source().GetSignal());
   }
 }
 

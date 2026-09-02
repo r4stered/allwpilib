@@ -56,8 +56,9 @@ void NT4Source::Update() {
     m_signal.timestamps.push_back((s.timeNanos - m_t0Nanos) * 1e-9);
     m_signal.values.push_back(s.value);
   }
-  m_signal.sampleRate = Signal::InferSampleRate(m_signal.timestamps);
-  m_signal.uniform = Signal::IsUniform(m_signal.timestamps);
+  // NT reports on change with network jitter on top, so the window is never
+  // uniform as received; resample it before anyone assumes a fixed dt.
+  m_signal.ResampleToGrid();
   ++m_signal.revision;
 }
 
@@ -72,7 +73,7 @@ void NT4Source::Clear() {
   m_signal.timestamps.clear();
   m_signal.values.clear();
   m_signal.sampleRate = 0.0;
-  m_signal.uniform = false;
+  m_signal.quality = GridQuality{};
   m_haveT0 = false;
   m_t0Nanos = 0;
   ++m_signal.revision;

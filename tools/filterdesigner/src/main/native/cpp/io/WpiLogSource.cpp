@@ -109,8 +109,12 @@ std::optional<Signal> WpiLogSource::LoadEntry(std::string_view name) const {
     sig.timestamps.push_back(record.GetTimestamp() * 1e-9);
     sig.values.push_back(value);
   }
-  sig.sampleRate = Signal::InferSampleRate(sig.timestamps);
-  sig.uniform = Signal::IsUniform(sig.timestamps);
+  // Integers stay continuous: an int64 entry is more often a count than a
+  // state enum.
+  sig.discrete = type == "boolean";
+  // WPILOG timestamps jitter and drop out, so resample the entry onto a
+  // uniform grid rather than handing downstream a fixed-dt lie.
+  sig.ResampleToGrid();
   return sig;
 }
 

@@ -26,7 +26,7 @@ const wpi::filterdesigner::Signal* ImpulseNodeLogic::Signal() const {
   wpi::filterdesigner::Signal s;
   s.name = "impulse";
   s.sampleRate = sampleRate;
-  s.uniform = true;
+  s.quality = GridQuality::Exact(sampleRate);
   s.timestamps.resize(static_cast<std::size_t>(clampedLen));
   s.values.assign(static_cast<std::size_t>(clampedLen), 0.0);
   for (int i = 0; i < clampedLen; ++i) {

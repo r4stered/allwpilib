@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -91,9 +93,11 @@ TEST_CASE_METHOD(WpiLogSourceTest,
                  "WpiLogSourceTest LoadEntryDoubleRecoversValuesAndTimestamps",
                  "[filterdesigner]") {
   wpi::log::DoubleLogEntry d{log, "accel", 0};
-  d.Append(0.5, 1'000'000);     // 0.001 s
-  d.Append(0.75, 2'500'000);    // 0.0025 s
-  d.Append(1.125, 10'000'000);  // 0.010 s
+  // Timestamps are nanoseconds and evenly spaced, so the loader's resample
+  // is the identity and these assertions are about decoding alone.
+  d.Append(0.5, 1'000'000);    // 0.001 s
+  d.Append(0.75, 2'000'000);   // 0.002 s
+  d.Append(1.125, 3'000'000);  // 0.003 s
   log.Flush();
 
   auto src = WpiLogSource::FromBuffer(data);
@@ -105,9 +109,9 @@ TEST_CASE_METHOD(WpiLogSourceTest,
   CHECK_DOUBLE_EQ(sig->values[0], 0.5);
   CHECK_DOUBLE_EQ(sig->values[1], 0.75);
   CHECK_DOUBLE_EQ(sig->values[2], 1.125);
-  CHECK_DOUBLE_EQ(sig->timestamps[0], 0.001);
-  CHECK_DOUBLE_EQ(sig->timestamps[1], 0.0025);
-  CHECK_DOUBLE_EQ(sig->timestamps[2], 0.010);
+  CHECK_NEAR(sig->timestamps[0], 0.001, 1e-12);
+  CHECK_NEAR(sig->timestamps[1], 0.002, 1e-12);
+  CHECK_NEAR(sig->timestamps[2], 0.003, 1e-12);
 }
 
 TEST_CASE_METHOD(WpiLogSourceTest,
@@ -141,9 +145,59 @@ TEST_CASE_METHOD(WpiLogSourceTest,
   auto sig = src->LoadEntry("gate");
   REQUIRE(sig.has_value());
   REQUIRE(sig->values.size() == 3u);
+  CHECK(sig->discrete);
   CHECK_DOUBLE_EQ(sig->values[0], 0.0);
   CHECK_DOUBLE_EQ(sig->values[1], 1.0);
   CHECK_DOUBLE_EQ(sig->values[2], 0.0);
+}
+
+TEST_CASE_METHOD(WpiLogSourceTest,
+                 "WpiLogSourceTest LoadEntryHoldsBooleanAcrossDroppedSample",
+                 "[filterdesigner]") {
+  // A boolean is discrete, so the grid holds it across the dropout at 4 us
+  // rather than interpolating a 0.5 the topic can never have carried.
+  wpi::log::BooleanLogEntry e{log, "gate", 0};
+  e.Append(false, 1'000);
+  e.Append(false, 2'000);
+  e.Append(false, 3'000);  // 4 us dropped
+  e.Append(true, 5'000);
+  e.Append(true, 6'000);
+  log.Flush();
+
+  auto src = WpiLogSource::FromBuffer(data);
+  REQUIRE(src.has_value());
+  auto sig = src->LoadEntry("gate");
+  REQUIRE(sig.has_value());
+  CHECK(sig->discrete);
+  REQUIRE(sig->values.size() == 6u);
+  const std::vector<double> expected{0.0, 0.0, 0.0, 0.0, 1.0, 1.0};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    UNSCOPED_INFO("boolean must be held at i=" << i);
+    CHECK_DOUBLE_EQ(sig->values[i], expected[i]);
+  }
+}
+
+TEST_CASE_METHOD(WpiLogSourceTest,
+                 "WpiLogSourceTest LoadEntryTreatsIntegersAsContinuous",
+                 "[filterdesigner]") {
+  // An int64 topic is more often a count than a state enum, so it is
+  // interpolated like any other measurement.
+  wpi::log::IntegerLogEntry e{log, "ticks", 0};
+  e.Append(0, 1'000);
+  e.Append(10, 2'000);
+  e.Append(20, 3'000);  // 4 us dropped
+  e.Append(40, 5'000);
+  e.Append(50, 6'000);
+  log.Flush();
+
+  auto src = WpiLogSource::FromBuffer(data);
+  REQUIRE(src.has_value());
+  auto sig = src->LoadEntry("ticks");
+  REQUIRE(sig.has_value());
+  CHECK_FALSE(sig->discrete);
+  REQUIRE(sig->values.size() == 6u);
+  // Halfway across the dropout between 20 and 40.
+  CHECK_NEAR(sig->values[3], 30.0, 1e-9);
 }
 
 TEST_CASE_METHOD(WpiLogSourceTest,
@@ -218,6 +272,50 @@ TEST_CASE_METHOD(WpiLogSourceTest,
 }
 
 TEST_CASE_METHOD(WpiLogSourceTest,
+                 "WpiLogSourceTest LoadEntryResamplesOntoUniformGrid",
+                 "[filterdesigner]") {
+  // What a real log actually looks like: nominally 1 kHz, timestamps off by
+  // up to a fifth of a period, and the sample at 6 ms never logged. The
+  // loader hands downstream a uniform grid so the fixed-dt assumption in the
+  // FFT and the biquad stages is true rather than merely assumed.
+  wpi::log::DoubleLogEntry d{log, "jittery", 0};
+  // No zero timestamps — Append treats 0 as "now" rather than as t = 0.
+  const int64_t nanos[] = {1'000'000, 2'000'000, 3'000'000, 4'200'000,
+                           5'000'000,  // 6 ms dropped
+                           7'000'000, 8'000'000, 8'800'000, 10'000'000};
+  for (std::size_t i = 0; i < std::size(nanos); ++i) {
+    d.Append(static_cast<double>(i), nanos[i]);
+  }
+  log.Flush();
+
+  auto src = WpiLogSource::FromBuffer(data);
+  REQUIRE(src.has_value());
+  auto sig = src->LoadEntry("jittery");
+  REQUIRE(sig.has_value());
+
+  CHECK_NEAR(sig->sampleRate, 1000.0, 1e-9);
+  REQUIRE(sig->values.size() == 10u);
+  REQUIRE(sig->timestamps.size() == 10u);
+  CHECK(sig->quality.onGrid);
+  for (std::size_t i = 0; i < sig->timestamps.size(); ++i) {
+    UNSCOPED_INFO("timestamp must land on the grid at i=" << i);
+    CHECK_NEAR(sig->timestamps[i], 0.001 + static_cast<double>(i) * 0.001,
+               1e-12);
+  }
+  // Slots landing on a record read it back exactly; the rest sit on the line
+  // between their neighbours.
+  const std::vector<double> expected{0.0, 1.0, 2.0, 2.0 + 5.0 / 6.0, 4.0,
+                                     4.5, 5.0, 6.0, 7.0 + 1.0 / 6.0, 8.0};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    UNSCOPED_INFO("value must be interpolated at i=" << i);
+    CHECK_NEAR(sig->values[i], expected[i], 1e-9);
+  }
+  CHECK_NEAR(sig->quality.filled, 0.1, 1e-12);
+  CHECK_NEAR(sig->quality.longestGap, 0.002, 1e-9);
+  CHECK_NEAR(sig->quality.jitter, 0.2, 1e-9);
+}
+
+TEST_CASE_METHOD(WpiLogSourceTest,
                  "WpiLogSourceTest LoadEntryAcrossMultipleIdsWhenRestarted",
                  "[filterdesigner]") {
   // Finish'd and restarted — same name, different entry IDs.
@@ -226,8 +324,10 @@ TEST_CASE_METHOD(WpiLogSourceTest,
   first.Append(2.0, 20'000);
   first.Finish(25);
   wpi::log::DoubleLogEntry second{log, "reopened", 30};
-  second.Append(3.0, 40'000);
-  second.Append(4.0, 50'000);
+  // On the same 10 us grid as the first entry, so the loader's resample
+  // doesn't fill across the restart and obscure the merge.
+  second.Append(3.0, 30'000);
+  second.Append(4.0, 40'000);
   log.Flush();
 
   auto src = WpiLogSource::FromBuffer(data);

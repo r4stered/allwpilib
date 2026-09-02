@@ -82,6 +82,15 @@ class NT4SourceNodeLogic {
   double BufferSeconds() const { return m_source.BufferSeconds(); }
   void SetBufferSeconds(double seconds) { m_source.SetBufferSeconds(seconds); }
 
+  /**
+   * Marks the subscribed topic as discrete, so the grid holds its values
+   * rather than interpolating between them. Set by the Node from the topic
+   * type; @ref Clear leaves it alone, since it describes the topic and not
+   * the samples.
+   */
+  bool Discrete() const { return m_source.Discrete(); }
+  void SetDiscrete(bool discrete) { m_source.SetDiscrete(discrete); }
+
   bool Frozen() const { return m_source.Frozen(); }
   void SetFrozen(bool frozen) { m_source.SetFrozen(frozen); }
 

@@ -20,6 +20,8 @@
 #include <filesystem>
 
 #include <imgui.h>
+
+#include "wpi/filterdesigner/nodes/SamplingReadout.hpp"
 #endif
 
 namespace wpi::filterdesigner {
@@ -126,6 +128,10 @@ void WpiLogSourceNode::draw() {
       }
     }
     ImGui::EndCombo();
+  }
+
+  if (const auto* signal = m_logic->Signal()) {
+    DrawSamplingReadout(*signal);
   }
 }
 

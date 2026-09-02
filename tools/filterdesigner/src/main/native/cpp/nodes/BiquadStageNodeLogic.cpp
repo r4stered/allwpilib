@@ -174,7 +174,9 @@ const Signal* BiquadStageNodeLogic::Filtered(const Signal* input) const {
   out.values = ApplyFilter(input->values, design->sections);
   out.name = input->name + StageKindSuffix(stage.kind);
   out.sampleRate = input->sampleRate;
-  out.uniform = input->uniform;
+  // Filtering keeps the input's timestamps, so it inherits their grid
+  // quality verbatim — the biquad neither improves nor degrades it.
+  out.quality = input->quality;
   out.revision = ++m_outRevision;
   out.live = input->live;
   m_filteredCache = std::move(out);

@@ -66,6 +66,14 @@ class NT4Source {
   const std::string& Name() const { return m_signal.name; }
   void SetName(std::string_view name) { m_signal.name = name; }
 
+  /**
+   * Marks the subscribed topic as taking only discrete values, so the grid
+   * holds them rather than interpolating between them. Set from the topic
+   * type when subscribing; survives @ref Clear, which only drops samples.
+   */
+  bool Discrete() const { return m_signal.discrete; }
+  void SetDiscrete(bool discrete) { m_signal.discrete = discrete; }
+
  private:
   DrainFn m_drain;
   std::deque<Sample> m_buffer;

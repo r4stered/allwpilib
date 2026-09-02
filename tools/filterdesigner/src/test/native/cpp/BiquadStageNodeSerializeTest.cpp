@@ -174,7 +174,7 @@ TEST_CASE(
   Signal in;
   in.name = "ramp";
   in.sampleRate = 1000.0;
-  in.uniform = true;
+  in.quality = wpi::filterdesigner::GridQuality::Exact(1000.0);
   in.timestamps.resize(64);
   in.values.resize(64);
   for (int i = 0; i < 64; ++i) {
