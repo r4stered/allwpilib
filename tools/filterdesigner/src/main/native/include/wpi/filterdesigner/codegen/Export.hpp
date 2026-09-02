@@ -33,17 +33,31 @@ struct ExportResult {
 };
 
 /**
- * @return @c true if @a name is a non-empty C-style identifier
- *         (`[A-Za-z_][A-Za-z0-9_]*`).
- */
-bool IsValidIdentifier(std::string_view name);
-
-/**
  * Converts CamelCase / PascalCase to snake_case. Used for Python file
  * and function names so they match PEP 8 even though the user types a
  * single PascalCase class name in the UI.
  */
 std::string ToSnakeCase(std::string_view name);
+
+/**
+ * Rewrites free-form UI text into a variable name that compiles and matches
+ * the example projects' style for @a lang: lowerCamelCase for C++ and Java,
+ * snake_case for Python. Characters that can't appear in an identifier become
+ * word boundaries, a leading digit is prefixed with an underscore, and an
+ * input with nothing usable in it falls back to "filter".
+ *
+ * Reserved words are not rejected; that would need a per-language keyword
+ * table.
+ */
+std::string NormalizeVariableName(std::string_view name, Language lang);
+
+/**
+ * Rewrites free-form UI text into a class name that compiles: as
+ * @ref NormalizeVariableName, but PascalCase, falling back to "MyFilter".
+ * Python callers snake_case the result themselves for file and function
+ * names, so this is language-independent.
+ */
+std::string NormalizeClassName(std::string_view name);
 
 /**
  * Resolves the input to an absolute, normalized path. Returns an empty path
@@ -80,7 +94,7 @@ std::string BuildExportFileContents(const Sections& sections, Language lang,
  * @param sections    Combined cascade to emit.
  * @param lang        Target language.
  * @param className   Identifier to use for the class / function name.
- *                    Must satisfy @ref IsValidIdentifier.
+ *                    Normalized via @ref NormalizeClassName.
  * @param projectRoot Root of the user's WPILib robot project.
  * @param spec        Comment-header metadata.
  *

@@ -53,9 +53,9 @@ TEST_CASE("ExportNodeLogicTest InvalidClassNameFails", "[filterdesigner]") {
       (std::filesystem::temp_directory_path() / "fd_export_node_invalid")
           .string();
   DesignedFilter f = MakeFilter();
-  CHECK_FALSE(logic.Export(&f));
-  CHECK_FALSE(logic.lastOk);
-  CHECK(logic.lastMessage.find("Invalid class name") != std::string::npos);
+  CHECK(logic.Export(&f));
+  CHECK(logic.lastOk);
+  CHECK(logic.lastMessage.find("_9bad") != std::string::npos);
 }
 
 TEST_CASE("ExportNodeLogicTest EmptyRootFails", "[filterdesigner]") {

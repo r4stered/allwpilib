@@ -115,21 +115,69 @@ Lines EmitPythonFile(const Sections& sections, std::string_view className,
 
 }  // namespace
 
-bool IsValidIdentifier(std::string_view name) {
-  if (name.empty()) {
-    return false;
-  }
-  unsigned char first = static_cast<unsigned char>(name[0]);
-  if (!(std::isalpha(first) || first == '_')) {
-    return false;
-  }
-  for (size_t i = 1; i < name.size(); ++i) {
-    unsigned char c = static_cast<unsigned char>(name[i]);
-    if (!(std::isalnum(c) || c == '_')) {
-      return false;
+namespace {
+
+// Rebuilds `name` as a valid identifier. Runs of characters that can't appear
+// in one become word boundaries: `join` decides whether a boundary emits an
+// underscore or capitalizes the next letter. Underscores in the input survive
+// as-is, since they're already legal.
+std::string RebuildIdentifier(std::string_view name, bool underscoreJoin) {
+  std::string out;
+  bool boundary = false;
+  for (char ch : name) {
+    unsigned char c = static_cast<unsigned char>(ch);
+    if (std::isalnum(c) || c == '_') {
+      if (boundary) {
+        if (underscoreJoin) {
+          out.push_back('_');
+        } else if (std::isalpha(c)) {
+          c = static_cast<unsigned char>(std::toupper(c));
+        }
+      }
+      out.push_back(static_cast<char>(c));
+      boundary = false;
+    } else if (!out.empty()) {
+      boundary = true;
     }
   }
-  return true;
+  if (!out.empty() && std::isdigit(static_cast<unsigned char>(out[0]))) {
+    out.insert(out.begin(), '_');
+  }
+  return out;
+}
+
+// Squeezes runs of underscores left behind by snake-casing an input that
+// already had separators in it ("my filter" -> "my__filter").
+std::string CollapseUnderscores(std::string s) {
+  std::string out;
+  for (char c : s) {
+    if (c == '_' && !out.empty() && out.back() == '_') {
+      continue;
+    }
+    out.push_back(c);
+  }
+  return out;
+}
+
+}  // namespace
+
+std::string NormalizeVariableName(std::string_view name, Language lang) {
+  std::string out;
+  if (lang == Language::Python) {
+    out = CollapseUnderscores(ToSnakeCase(RebuildIdentifier(name, true)));
+  } else {
+    out = RebuildIdentifier(name, false);
+  }
+  return out.empty() ? std::string{"filter"} : out;
+}
+
+std::string NormalizeClassName(std::string_view name) {
+  std::string out = RebuildIdentifier(name, false);
+  if (out.empty()) {
+    return "MyFilter";
+  }
+  out[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[0])));
+  return out;
 }
 
 std::string ToSnakeCase(std::string_view name) {
@@ -206,24 +254,19 @@ ExportResult ExportFilter(const Sections& sections, Language lang,
     result.message = "No sections to export.";
     return result;
   }
-  if (!IsValidIdentifier(className)) {
-    result.message = "Invalid class name.";
-    return result;
-  }
+  std::string name = NormalizeClassName(className);
   if (projectRoot.empty()) {
     result.message = "Project root is empty.";
     return result;
   }
 
-  std::string contents =
-      BuildExportFileContents(sections, lang, className, spec);
+  std::string contents = BuildExportFileContents(sections, lang, name, spec);
   if (contents.empty()) {
     result.message = "Failed to build file contents.";
     return result;
   }
 
-  std::filesystem::path target =
-      ResolveExportPath(projectRoot, lang, className);
+  std::filesystem::path target = ResolveExportPath(projectRoot, lang, name);
   std::error_code ec;
   std::filesystem::create_directories(target.parent_path(), ec);
   if (ec) {

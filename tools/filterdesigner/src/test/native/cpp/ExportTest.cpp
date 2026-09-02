@@ -17,9 +17,10 @@ namespace {
 using wpi::filterdesigner::BuildExportFileContents;
 using wpi::filterdesigner::ExportFilter;
 using wpi::filterdesigner::ExportSpec;
-using wpi::filterdesigner::IsValidIdentifier;
 using wpi::filterdesigner::Language;
+using wpi::filterdesigner::NormalizeClassName;
 using wpi::filterdesigner::NormalizeProjectRoot;
+using wpi::filterdesigner::NormalizeVariableName;
 using wpi::filterdesigner::ResolveExportPath;
 using wpi::filterdesigner::Section;
 using wpi::filterdesigner::Sections;
@@ -43,35 +44,48 @@ ExportSpec SimpleSpec() {
                     "  1. Low pass  order=4  cutoff=50 Hz\n"};
 }
 
-// IsValidIdentifier ----------------------------------------------------------
+// NormalizeVariableName / NormalizeClassName ---------------------------------
 
-TEST_CASE("ExportIdentifierTest RejectsEmpty", "[filterdesigner]") {
-  CHECK_FALSE(IsValidIdentifier(""));
-}
-
-TEST_CASE("ExportIdentifierTest RejectsLeadingDigit", "[filterdesigner]") {
-  CHECK_FALSE(IsValidIdentifier("9abc"));
-}
-
-TEST_CASE("ExportIdentifierTest RejectsHyphen", "[filterdesigner]") {
-  CHECK_FALSE(IsValidIdentifier("foo-bar"));
-}
-
-TEST_CASE("ExportIdentifierTest RejectsSpace", "[filterdesigner]") {
-  CHECK_FALSE(IsValidIdentifier("foo bar"));
-}
-
-TEST_CASE("ExportIdentifierTest AcceptsLeadingUnderscore", "[filterdesigner]") {
-  CHECK(IsValidIdentifier("_foo"));
-}
-
-TEST_CASE("ExportIdentifierTest AcceptsAlphanumericAndUnderscore",
+TEST_CASE("ExportTest NormalizeVariableNameCamelCasesForCppAndJava",
           "[filterdesigner]") {
-  CHECK(IsValidIdentifier("Shooter_Filter_2"));
+  for (Language lang : {Language::Cpp, Language::Java}) {
+    CHECK(NormalizeVariableName("my filter", lang) == "myFilter");
+    CHECK(NormalizeVariableName("filter-2", lang) == "filter2");
+    CHECK(NormalizeVariableName("1filter", lang) == "_1filter");
+    CHECK(NormalizeVariableName("a;b", lang) == "aB");
+  }
 }
 
-TEST_CASE("ExportIdentifierTest AcceptsSingleLetter", "[filterdesigner]") {
-  CHECK(IsValidIdentifier("X"));
+TEST_CASE("ExportTest NormalizeVariableNameLeavesValidCppNamesAlone",
+          "[filterdesigner]") {
+  // Casing the user chose is theirs to keep, including the m_ convention.
+  CHECK(NormalizeVariableName("shooterFilter", Language::Cpp) ==
+        "shooterFilter");
+  CHECK(NormalizeVariableName("m_shooterFilter", Language::Cpp) ==
+        "m_shooterFilter");
+}
+
+TEST_CASE("ExportTest NormalizeVariableNameSnakeCasesForPython",
+          "[filterdesigner]") {
+  CHECK(NormalizeVariableName("my filter", Language::Python) == "my_filter");
+  CHECK(NormalizeVariableName("shooterFilter", Language::Python) ==
+        "shooter_filter");
+  CHECK(NormalizeVariableName("filter-2", Language::Python) == "filter_2");
+}
+
+TEST_CASE("ExportTest NormalizeVariableNameFallsBackWhenNothingUsable",
+          "[filterdesigner]") {
+  for (Language lang : {Language::Cpp, Language::Java, Language::Python}) {
+    CHECK(NormalizeVariableName("", lang) == "filter");
+    CHECK(NormalizeVariableName("!!!", lang) == "filter");
+  }
+}
+
+TEST_CASE("ExportTest NormalizeClassNamePascalCases", "[filterdesigner]") {
+  CHECK(NormalizeClassName("my filter") == "MyFilter");
+  CHECK(NormalizeClassName("shooterFilter") == "ShooterFilter");
+  CHECK(NormalizeClassName("9bad") == "_9bad");
+  CHECK(NormalizeClassName("") == "MyFilter");
 }
 
 // ToSnakeCase ----------------------------------------------------------------
@@ -282,13 +296,13 @@ TEST_CASE("ExportBuildContentsTest PythonGoldenFile", "[filterdesigner]") {
 
 // ExportFilter (round-trip on disk) -----------------------------------------
 
-TEST_CASE("ExportFilterTest RejectsInvalidClassName", "[filterdesigner]") {
+TEST_CASE("ExportFilterTest NormalizesInvalidClassName", "[filterdesigner]") {
   auto sections = OnePassthroughSection();
   auto root = std::filesystem::temp_directory_path() / "fd_export_test_invalid";
   auto result =
       ExportFilter(sections, Language::Cpp, "9bad", root, SimpleSpec());
-  CHECK_FALSE(result.ok);
-  CHECK(result.message.find("Invalid class name") != std::string::npos);
+  REQUIRE(result.ok);
+  CHECK(result.writtenPath.filename().string() == "_9bad.h");
 }
 
 TEST_CASE("ExportFilterTest RejectsEmptyRoot", "[filterdesigner]") {

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "wpi/filterdesigner/codegen/CodeGen.hpp"
+#include "wpi/filterdesigner/codegen/Export.hpp"
 #include "wpi/filterdesigner/model/DesignedFilter.hpp"
 
 namespace wpi::filterdesigner {
@@ -15,7 +16,7 @@ std::string CodeGenNodeLogic::Generate(const DesignedFilter* filter) const {
   if (!filter || filter->sections.empty()) {
     return {};
   }
-  return EmitCode(filter->sections, lang, varName);
+  return EmitCode(filter->sections, lang, NormalizeVariableName(varName, lang));
 }
 
 }  // namespace wpi::filterdesigner

@@ -75,4 +75,29 @@ TEST_CASE("CodeGenNodeLogicTest VarNameAppearsInEmittedCode",
   CHECK(out.find("shooterFilter") != std::string::npos);
 }
 
+TEST_CASE("CodeGenNodeLogicTest NormalizesVarNamePerLanguage",
+          "[filterdesigner]") {
+  DesignedFilter f = MakeFilter();
+  CodeGenNodeLogic logic;
+  logic.varName = "my filter";
+
+  logic.lang = Language::Cpp;
+  CHECK(logic.Generate(&f).find("myFilter") != std::string::npos);
+  logic.lang = Language::Java;
+  CHECK(logic.Generate(&f).find("myFilter") != std::string::npos);
+  logic.lang = Language::Python;
+  CHECK(logic.Generate(&f).find("my_filter") != std::string::npos);
+}
+
+TEST_CASE("CodeGenNodeLogicTest UnusableVarNameStillEmits",
+          "[filterdesigner]") {
+  DesignedFilter f = MakeFilter();
+  for (const char* bad : {"", "!!!", "1filter"}) {
+    CodeGenNodeLogic logic;
+    logic.varName = bad;
+    UNSCOPED_INFO("varName = '" << bad << "'");
+    CHECK_FALSE(logic.Generate(&f).empty());
+  }
+}
+
 }  // namespace

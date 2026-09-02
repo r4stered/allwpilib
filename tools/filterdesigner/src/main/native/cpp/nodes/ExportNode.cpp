@@ -130,13 +130,13 @@ void ExportNode::draw() {
 
   const DesignedFilter* filter = getInVal<const DesignedFilter*>("in");
   bool haveFilter = filter && !filter->sections.empty();
-  bool classNameValid = IsValidIdentifier(m_logic->className);
   bool rootGiven = !m_logic->projectRoot.empty();
-  bool canExport = haveFilter && classNameValid && rootGiven;
+  bool canExport = haveFilter && rootGiven;
 
-  if (haveFilter && classNameValid && rootGiven) {
+  if (haveFilter && rootGiven) {
     auto target = ResolveExportPath(std::filesystem::path{m_logic->projectRoot},
-                                    m_logic->lang, m_logic->className);
+                                    m_logic->lang,
+                                    NormalizeClassName(m_logic->className));
     ImGui::TextDisabled("Will write: %s", target.string().c_str());
   } else if (!haveFilter) {
     // Distinguish "no upstream wired" from "upstream wired but errored".
@@ -147,8 +147,6 @@ void ExportNode::draw() {
     } else {
       ImGui::TextDisabled("Connect a Filter to enable export.");
     }
-  } else if (!classNameValid) {
-    ImGui::TextDisabled("Class name must be a valid identifier.");
   } else if (!rootGiven) {
     ImGui::TextDisabled("Set a project root to enable export.");
   }

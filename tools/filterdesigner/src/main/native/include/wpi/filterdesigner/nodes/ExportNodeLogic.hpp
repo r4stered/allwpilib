@@ -30,7 +30,7 @@ class ExportNodeLogic {
   /** Target language. */
   Language lang = Language::Cpp;
 
-  /** Class / function identifier. Must satisfy @ref IsValidIdentifier. */
+  /** Class / function identifier. Normalized on export. */
   std::string className = "MyFilter";
 
   /** Absolute path to the WPILib robot project root. Empty = unset. */
