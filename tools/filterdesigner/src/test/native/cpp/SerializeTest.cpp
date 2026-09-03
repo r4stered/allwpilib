@@ -226,6 +226,36 @@ TEST_CASE("SerializeTest UnknownPinNameSkippedWithWarning",
   CHECK(graph.Links().empty());
 }
 
+TEST_CASE("SerializeTest DuplicateLinkSkippedWithWarning", "[filterdesigner]") {
+  // ImNodeFlow's createLink toggles, so loading the same link twice would
+  // leave the input disconnected, and the next save would drop the wire.
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FakeSource", "pos": [0, 0], "value": 1},
+      {"id": 2, "type": "FakeSink", "pos": [100, 0]}
+    ],
+    "links": [
+      {"src": {"node": 1, "pin": "out"}, "dst": {"node": 2, "pin": "in"}},
+      {"src": {"node": 1, "pin": "out"}, "dst": {"node": 2, "pin": "in"}}
+    ]
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  UNSCOPED_INFO("the repeat must surface as a warning");
+  CHECK(result.warnings.size() == 1u);
+  auto links = graph.Links();
+  REQUIRE(links.size() == 1u);
+  CHECK(links[0].srcId == 1);
+  CHECK(links[0].dstId == 2);
+}
+
 TEST_CASE("SerializeTest NonNumericPosSkippedWithWarning", "[filterdesigner]") {
   // A malformed pos field is skipped with a warning; get_number() on it
   // would throw or abort in a release build.

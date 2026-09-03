@@ -210,6 +210,16 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
       result.warnings.emplace_back("Link references missing pin; skipped");
       continue;
     }
+    // ImNodeFlow's createLink is a toggle: a second call with the same output
+    // disconnects the input again, so a file listing a link twice would load
+    // with no wire and the next save would drop it for good.
+    if (auto existing = inPin->getLink().lock();
+        existing && existing->left() == outPin) {
+      result.warnings.emplace_back(
+          "Duplicate link into pin '" + dstPin->get_string() + "' of node " +
+          std::to_string(static_cast<int>(dstId->get_number())) + " — skipped");
+      continue;
+    }
     inPin->createLink(outPin);
   }
 
