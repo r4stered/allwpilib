@@ -164,4 +164,25 @@ TEST_CASE("PoleZeroTest ComplexPolesAreConjugatePairs", "[filterdesigner]") {
   }
 }
 
+TEST_CASE("PoleZeroTest TinyGainSectionKeepsItsZeros", "[filterdesigner]") {
+  // The cascade gain lands in the first section's numerator. For an 8th-order
+  // 1 Hz low-pass at 1 kHz that gain is ~1e-20, so an absolute "is this
+  // coefficient zero" cutoff would drop that section's two zeros at z = -1.
+  auto filter = SectionsOf(
+      BiquadFilter::Butterworth(BiquadFilter::Kind::LowPass, 8, 1000_Hz, 1_Hz));
+  REQUIRE(filter.size() == 4u);
+  UNSCOPED_INFO("precondition: the gain really is below any fixed cutoff");
+  REQUIRE(std::abs(filter[0].b0) < 1e-15);
+
+  auto pz = ComputePolesZeros(filter);
+  CHECK(pz.poles.size() == 8u);
+  REQUIRE(pz.zeros.size() == 8u);
+  for (const auto& z : pz.zeros) {
+    UNSCOPED_INFO("zero at (" << z.real() << ", " << z.imag()
+                              << ") should sit at -1");
+    CHECK_NEAR(z.real(), -1.0, 1e-6);
+    CHECK_NEAR(z.imag(), 0.0, 1e-6);
+  }
+}
+
 }  // namespace

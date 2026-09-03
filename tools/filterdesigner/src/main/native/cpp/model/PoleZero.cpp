@@ -4,6 +4,7 @@
 
 #include "wpi/filterdesigner/model/PoleZero.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <vector>
@@ -16,11 +17,22 @@ namespace {
 // coefficients zero) collapse to a linear or null polynomial and return
 // fewer roots accordingly — this matches how scipy.signal.tf2zpk handles
 // trailing-zero numerators when expressing a 1st-order filter as a biquad.
+//
+// "Zero" is judged relative to the largest coefficient, not absolutely: the
+// designer folds the whole cascade gain into one section's numerator, and for
+// a high-order, low-cutoff filter that gain is far below any fixed cutoff
+// (an 8th-order 1 Hz low-pass at 1 kHz puts it near 1e-20) while the
+// section's two zeros are still perfectly real.
 std::vector<std::complex<double>> QuadraticRoots(double p0, double p1,
                                                  double p2) {
-  constexpr double kCoefEps = 1e-15;
-  if (std::abs(p0) < kCoefEps) {
-    if (std::abs(p1) < kCoefEps) {
+  constexpr double kRelEps = 1e-12;
+  const double scale = std::max({std::abs(p0), std::abs(p1), std::abs(p2)});
+  if (scale == 0.0) {
+    return {};
+  }
+  const double coefEps = kRelEps * scale;
+  if (std::abs(p0) < coefEps) {
+    if (std::abs(p1) < coefEps) {
       return {};
     }
     return {std::complex<double>{-p2 / p1, 0.0}};
