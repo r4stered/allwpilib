@@ -34,13 +34,19 @@ constexpr const char* kRejectV1Message =
     "This .fdsgn file uses an older format (v1) that this tool no longer "
     "supports. Rebuild the design as a node graph and re-save.";
 
-// Ids and the version live in an int, and a loaded id is bumped by one to
-// mint the next fresh one, so on top of ReadJsonInt's range check a graph
-// int must be non-negative and leave room for that increment: only
-// [0, INT_MAX) qualifies.
+// A loaded node id is bumped by one to mint the next fresh one, and every
+// AddNode after the load increments that counter again. Leaving room for a
+// single increment is not enough, then: a file naming an id near the top of
+// the range would hand the counter to AddNode already at the ceiling. Ids
+// only ever count the nodes in one design, so half the range is a ceiling
+// no real file approaches and no amount of clicking can climb to.
+constexpr int kMaxGraphInt = std::numeric_limits<int>::max() / 2;
+
+// Ids and the version live in an int, so on top of ReadJsonInt's range check
+// a graph int must be non-negative and within that ceiling.
 std::optional<int> ReadGraphInt(const json& value) {
   const std::optional<int> v = ReadJsonInt(value);
-  if (!v || *v < 0 || *v >= std::numeric_limits<int>::max()) {
+  if (!v || *v < 0 || *v > kMaxGraphInt) {
     return std::nullopt;
   }
   return v;

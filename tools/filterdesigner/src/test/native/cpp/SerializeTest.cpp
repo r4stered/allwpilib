@@ -531,6 +531,38 @@ TEST_CASE("SerializeTest NewNodesAfterLoadDontCollideWithLoadedIds",
   CHECK(fresh->GraphId() > 12);
 }
 
+TEST_CASE("SerializeTest NodeIdNearTheTopOfIntRangeSkippedWithWarning",
+          "[filterdesigner]") {
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  // An id one below INT_MAX fits an int and survives the bump to the next
+  // id, but hands AddNode a counter already at the ceiling, and the
+  // increment there is undefined. Ids count the nodes of one design, so the
+  // loader keeps them under half the range with room to spare.
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 2147483646, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 1073741824, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 1073741823, "type": "FakeSink", "pos": [100, 0]}
+    ],
+    "links": []
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(result.warnings.size() == 2u);
+  REQUIRE(graph.Nodes().size() == 1u);
+  CHECK(graph.FindNodeById(1073741823) != nullptr);
+  // The largest id the loader accepts still leaves the counter room to mint
+  // the next one.
+  auto fresh = graph.AddNode<FakeSourceNode>(ImVec2{200.0f, 0.0f});
+  CHECK(fresh->GraphId() == 1073741824);
+}
+
 TEST_CASE("SerializeTest NodeIdOutsideIntRangeSkippedWithWarning",
           "[filterdesigner]") {
   NodeRegistry reg;

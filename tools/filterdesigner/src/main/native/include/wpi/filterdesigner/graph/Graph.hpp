@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -62,7 +63,15 @@ class Graph {
     static_assert(std::is_base_of_v<FilterDesignerNode, T>,
                   "Graph nodes must derive from FilterDesignerNode");
     auto node = m_editor->addNode<T>(pos, std::forward<Args>(args)...);
-    node->SetGraphId(m_nextId++);
+    node->SetGraphId(m_nextId);
+    // Saturate rather than wrap. The deserializer caps the ids a file may
+    // set well below this, and a graph would have to hold two billion live
+    // nodes to climb here on its own, so the ceiling is unreachable in
+    // practice — but incrementing past it would be undefined behaviour, and
+    // the counter takes whatever a file puts in it.
+    if (m_nextId < std::numeric_limits<int>::max()) {
+      ++m_nextId;
+    }
     node->SetGraph(this);
     return node;
   }
