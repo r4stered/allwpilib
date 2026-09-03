@@ -63,8 +63,13 @@ class CreationPopup {
    */
   bool DrawMenuItems(const ImVec2& gridPos, ImFlow::Pin* draggedPin);
 
+  // Only read by the drawing code, which the test build compiles out, so
+  // clang's -Wunused-private-field would otherwise fail that build.
+  [[maybe_unused]]
   Graph* m_graph;
+  [[maybe_unused]]
   const NodeRegistry* m_registry;
+  [[maybe_unused]]
   bool m_openExternalRequested = false;
 };
 

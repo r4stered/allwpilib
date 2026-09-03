@@ -62,6 +62,10 @@ class WpiLogSourceNode final : public FilterDesignerNode {
   std::unique_ptr<WpiLogSourceNodeLogic> m_logic;
   std::unique_ptr<pfd::open_file> m_opener;
 
+  // The fields below only matter to draw, which the test build compiles
+  // out, so clang's -Wunused-private-field sees the trivially-typed ones as
+  // dead there.
+
   /** Live query in the entry picker. Owned here rather than by the logic:
    * it filters what the popup shows and never touches what is published. */
   std::string m_entrySearch;
@@ -69,11 +73,14 @@ class WpiLogSourceNode final : public FilterDesignerNode {
   TimeRange m_pending;
   /** True while a marker or a new-window drag is live, so the window commits
    * once on release. */
+  [[maybe_unused]]
   bool m_dragging = false;
   /** True while a left-drag across open strip is drawing a new window. */
+  [[maybe_unused]]
   bool m_selecting = false;
   /** Where that drag started, in seconds. The other edge is the cursor, so
    * one gesture names both and neither is ever the ambiguous one. */
+  [[maybe_unused]]
   double m_selectAnchor = 0.0;
   /** Record span the timeline's x-axis was last fitted to. Refitting when it
    * changes is what keeps picking a differently-timed entry from leaving the
@@ -83,6 +90,7 @@ class WpiLogSourceNode final : public FilterDesignerNode {
    * it, a node's width not being known until after @ref draw returns. It
    * settles in two frames: the strip matches the widest row, never widens
    * past it. */
+  [[maybe_unused]]
   float m_contentWidth = 0.0f;
 };
 
