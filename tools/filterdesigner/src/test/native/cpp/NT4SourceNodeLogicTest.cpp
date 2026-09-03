@@ -137,4 +137,12 @@ TEST_CASE("NT4SourceNodeLogicTest UpdateWithNoDrainIsNoOp",
   CHECK(logic.Signal() == nullptr);
 }
 
+TEST_CASE("NT4SourceNodeLogicTest SanitizeTeamClampsToNtcoreAddressRange",
+          "[filterdesigner]") {
+  // ntcore only forms 10.TE.AM.2 for teams 0 through 25599.
+  CHECK(NT4SourceNodeLogic::SanitizeTeam(25599) == 25599);
+  CHECK(NT4SourceNodeLogic::SanitizeTeam(25600) == 25599);
+  CHECK(NT4SourceNodeLogic::SanitizeTeam(100000) == 25599);
+}
+
 }  // namespace

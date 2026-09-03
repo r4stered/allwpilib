@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -91,7 +92,15 @@ class NT4SourceNodeLogic {
 
   // --- Input sanitization shared between UI + deserialize paths ---------
 
-  static int SanitizeTeam(int t) { return t < 0 ? 0 : t; }
+  /**
+   * Clamps @p t to the team numbers ntcore can turn into a 10.TE.AM.2
+   * address, 0 through 25599. ntcore quietly adds no team address for a
+   * larger value, and the node would sit at "connecting..." for good.
+   */
+  static int SanitizeTeam(int t) {
+    constexpr int kMaxTeam = 25599;
+    return std::clamp(t, 0, kMaxTeam);
+  }
   /**
    * Clamps @p p to a valid TCP port: non-positive falls back to the ntcore
    * default, anything past 65535 caps there. ntcore itself casts to unsigned
