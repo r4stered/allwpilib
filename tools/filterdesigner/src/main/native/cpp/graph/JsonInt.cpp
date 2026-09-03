@@ -5,22 +5,25 @@
 #include "wpi/filterdesigner/graph/JsonInt.hpp"
 
 #include <limits>
+#include <utility>
 
 namespace wpi::filterdesigner {
 
 std::optional<int> ReadJsonInt(const wpi::util::json& value) {
   constexpr auto kMax = std::numeric_limits<int>::max();
   constexpr auto kMin = std::numeric_limits<int>::min();
+  // std::cmp_* compare across signedness without a cast, which keeps both
+  // cpplint's runtime/int and GCC's ignored-qualifiers warnings quiet.
   if (value.is_uint()) {
     const auto v = value.get_uint();
-    if (v > static_cast<decltype(v)>(kMax)) {
+    if (std::cmp_greater(v, kMax)) {
       return std::nullopt;
     }
     return static_cast<int>(v);
   }
   if (value.is_int()) {
     const auto v = value.get_int();
-    if (v < kMin || v > kMax) {
+    if (std::cmp_less(v, kMin) || std::cmp_greater(v, kMax)) {
       return std::nullopt;
     }
     return static_cast<int>(v);
