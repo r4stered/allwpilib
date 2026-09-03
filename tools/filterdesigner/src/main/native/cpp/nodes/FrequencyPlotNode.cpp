@@ -139,18 +139,23 @@ void FrequencyPlotNode::draw() {
     if (m_logic->showLegend) {
       ImPlot::SetupLegend(ImPlotLocation_NorthEast);
     }
+    // Bin zero is exactly 0 Hz, which a log axis clamps to DBL_MIN; fitting
+    // to it spans hundreds of empty decades with every real bin against the
+    // right edge. Skip it in log mode.
+    const size_t firstBin = m_logic->logFrequency ? 1 : 0;
     for (int i = 0; i < kInputCount; ++i) {
       const Spectrum* spec = spectra[i];
-      if (!spec) {
+      if (!spec || spec->frequencies.size() <= firstBin) {
         continue;
       }
-      int count = static_cast<int>(std::min<size_t>(
-          spec->frequencies.size(), std::numeric_limits<int>::max()));
+      int count =
+          static_cast<int>(std::min<size_t>(spec->frequencies.size() - firstBin,
+                                            std::numeric_limits<int>::max()));
       const std::string label = (signals[i] && !signals[i]->name.empty())
                                     ? signals[i]->name
                                     : std::string{kInputNames[i]};
-      ImPlot::PlotLine(label.c_str(), spec->frequencies.data(),
-                       spec->magnitudesDb.data(), count,
+      ImPlot::PlotLine(label.c_str(), spec->frequencies.data() + firstBin,
+                       spec->magnitudesDb.data() + firstBin, count,
                        {ImPlotProp_LineColor, PlotPaletteVec4(i)});
     }
     ImPlot::EndPlot();
