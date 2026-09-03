@@ -251,14 +251,9 @@ void BiquadStageNode::draw() {
   const Signal* input = getInVal<const Signal*>("in");
   const bool inputHasRate = input && input->sampleRate > 0.0;
   if (m_logic->sampleRateAutoSync && inputHasRate) {
-    // A live source's inferred rate wobbles by well under a percent as
-    // samples roll through its ring buffer, and the design cache keys on
-    // exact equality — so adopting every wobble would redesign the filter and
-    // invalidate every downstream cache each frame. Deadband it.
-    constexpr double kRateSyncTolerance = 0.01;
     const double cur = m_logic->sampleRate;
-    if (cur <= 0.0 ||
-        std::abs(input->sampleRate - cur) > kRateSyncTolerance * cur) {
+    if (cur <= 0.0 || std::abs(input->sampleRate - cur) >
+                          BiquadStageNodeLogic::kRateSyncTolerance * cur) {
       m_logic->sampleRate = input->sampleRate;
     }
   }
@@ -339,12 +334,19 @@ void BiquadStageNode::draw() {
     }
   }
 
-  // Force a combined-design pass so the banner reflects upstream state too.
-  // Cached on (upstream pointer and version, self version).
+  // Force a combined-design pass so the banner reflects upstream state too,
+  // and a filtering pass so a rate mismatch on the input shows even when no
+  // sink is pulling the signal pin. Both are cached: the first on (upstream
+  // pointer and version, self version), the second on (input, revision,
+  // filter version).
   const DesignedFilter* combined = CombinedFilter();
+  m_logic->Filtered(input);
   if (!combined) {
     ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s",
                        CombinedError().c_str());
+  } else if (!m_logic->FilterError().empty()) {
+    ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s",
+                       m_logic->FilterError().c_str());
   } else if (const DesignedFilter* self = m_logic->Filter();
              self && combined->sections.size() > self->sections.size()) {
     ImGui::TextDisabled("Cascade: %zu sections (this stage: %zu)",

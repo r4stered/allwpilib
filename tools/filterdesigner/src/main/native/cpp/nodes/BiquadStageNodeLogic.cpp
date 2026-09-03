@@ -4,6 +4,8 @@
 
 #include "wpi/filterdesigner/nodes/BiquadStageNodeLogic.hpp"
 
+#include <cmath>
+#include <format>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -155,6 +157,7 @@ const Signal* BiquadStageNodeLogic::Filtered(const Signal* input) const {
     m_filteredCache.reset();
     m_filteredInput = nullptr;
     m_filteredInputRev = 0;
+    m_filterError.clear();
     return nullptr;
   }
   const DesignedFilter* design = Filter();
@@ -163,6 +166,21 @@ const Signal* BiquadStageNodeLogic::Filtered(const Signal* input) const {
     m_filteredCache.reset();
     return nullptr;
   }
+  // The cascade check between stages lives in BiquadStageNode; this is the
+  // same check at the input boundary, where a hand-set rate can disagree with
+  // the wire. Applying the coefficients anyway would scale every cutoff by
+  // the ratio while the Bode plot and export kept promising the design.
+  if (input->sampleRate > 0.0 &&
+      std::abs(input->sampleRate - design->sampleRate) >
+          kRateMismatchTolerance * design->sampleRate) {
+    m_haveFiltered = false;
+    m_filteredCache.reset();
+    m_filterError = std::format(
+        "Input sample rate {:.3f} Hz does not match design rate {:.3f} Hz",
+        input->sampleRate, design->sampleRate);
+    return nullptr;
+  }
+  m_filterError.clear();
   if (m_haveFiltered && m_filteredInput == input &&
       m_filteredInputRev == input->revision &&
       m_filteredAtFilterVersion == m_filterVersion) {

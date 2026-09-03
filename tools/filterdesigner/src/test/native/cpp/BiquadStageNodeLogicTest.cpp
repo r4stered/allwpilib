@@ -181,6 +181,46 @@ TEST_CASE("BiquadStageNodeLogicTest FilteredCacheInvalidatesOnDesignChange",
   CHECK(second->values != firstValues);
 }
 
+TEST_CASE("BiquadStageNodeLogicTest FilteredRejectsInputAtAnotherRate",
+          "[filterdesigner]") {
+  BiquadStageNodeLogic logic;  // designed at 1000 Hz
+  logic.stage.f1 = 20.0;       // below Nyquist at either rate
+  Signal in = SineSignal(10.0, 200.0, 64, "x");
+  CHECK(logic.Filtered(&in) == nullptr);
+  CHECK_FALSE(logic.FilterError().empty());
+  CHECK(logic.DesignError().empty());
+
+  // Adopting the wire's rate — what Auto does — clears it.
+  logic.sampleRate = 200.0;
+  const Signal* out = logic.Filtered(&in);
+  REQUIRE(out != nullptr);
+  CHECK(logic.FilterError().empty());
+  CHECK_DOUBLE_EQ(out->sampleRate, 200.0);
+}
+
+TEST_CASE("BiquadStageNodeLogicTest FilteredToleratesLiveRateWobble",
+          "[filterdesigner]") {
+  // An NT4 source's inferred rate drifts by well under the sync deadband;
+  // that must not flash an error while the node deadbands the adoption.
+  BiquadStageNodeLogic logic;
+  Signal in = SineSignal(10.0, 1000.0, 64, "x");
+  in.sampleRate =
+      1000.0 * (1.0 + 0.5 * BiquadStageNodeLogic::kRateSyncTolerance);
+  CHECK(logic.Filtered(&in) != nullptr);
+  CHECK(logic.FilterError().empty());
+}
+
+TEST_CASE("BiquadStageNodeLogicTest FilteredAcceptsInputWithUnknownRate",
+          "[filterdesigner]") {
+  // A source that could not infer a rate reports 0; there is nothing to
+  // compare against, and its own readout already says so.
+  BiquadStageNodeLogic logic;
+  Signal in = SineSignal(10.0, 1000.0, 64, "x");
+  in.sampleRate = 0.0;
+  CHECK(logic.Filtered(&in) != nullptr);
+  CHECK(logic.FilterError().empty());
+}
+
 TEST_CASE("BiquadStageNodeLogicTest NotchKindDesignsWithoutFamily",
           "[filterdesigner]") {
   BiquadStageNodeLogic logic;

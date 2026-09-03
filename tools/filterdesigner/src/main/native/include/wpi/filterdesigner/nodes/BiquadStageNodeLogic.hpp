@@ -46,6 +46,22 @@ class BiquadStageNodeLogic {
   bool sampleRateAutoSync = true;
 
   /**
+   * Relative deadband the node applies before adopting an input's rate in
+   * auto mode: a live source's inferred rate wobbles by well under a percent
+   * as samples roll through its ring buffer, and the design cache keys on
+   * exact equality, so adopting every wobble would redesign the filter and
+   * invalidate every downstream cache each frame.
+   */
+  static constexpr double kRateSyncTolerance = 0.01;
+
+  /**
+   * Relative mismatch between an input's rate and @ref sampleRate beyond
+   * which @ref Filtered refuses to run. Twice the sync deadband, so a rate
+   * the node is about to adopt never trips it for a frame.
+   */
+  static constexpr double kRateMismatchTolerance = 2.0 * kRateSyncTolerance;
+
+  /**
    * Designs the filter from the current @ref stage and @ref sampleRate and
    * returns a pointer to the cached result, valid until the next redesign.
    * Returns nullptr for parameters the family rejects (a cutoff above Nyquist,
@@ -55,9 +71,11 @@ class BiquadStageNodeLogic {
 
   /**
    * Returns @p input filtered through the current cascade, or nullptr if
-   * @p input is null or the design is invalid. The result is cached while
-   * (input pointer, input revision, filter version) hold, and the pointer is
-   * valid until they don't.
+   * @p input is null, the design is invalid, or the input's rate differs from
+   * @ref sampleRate by more than @ref kRateMismatchTolerance — the
+   * coefficients only mean what the Bode plot says at the rate they were
+   * designed for. The result is cached while (input pointer, input revision,
+   * filter version) hold, and the pointer is valid until they don't.
    *
    * Timestamps carry over verbatim; the name gains a stage suffix so a
    * multi-stage chain reads clearly in a plot legend.
@@ -69,6 +87,13 @@ class BiquadStageNodeLogic {
    * Empty when the current params produced a valid cascade.
    */
   const std::string& DesignError() const { return m_designError; }
+
+  /**
+   * Why the most recent @ref Filtered call returned nullptr for a non-null
+   * input with a valid design; empty otherwise. Today that is only a rate
+   * mismatch.
+   */
+  const std::string& FilterError() const { return m_filterError; }
 
   /**
    * Monotonically increasing version that bumps every time the design
@@ -99,6 +124,7 @@ class BiquadStageNodeLogic {
   mutable std::uint64_t m_filteredInputRev = 0;
   mutable std::uint64_t m_filteredAtFilterVersion = 0;
   mutable bool m_haveFiltered = false;
+  mutable std::string m_filterError;
   // Revision stamped onto the filtered output; m_filteredCache is
   // pointer-stable, so downstream caches key on this to see recomputes.
   mutable std::uint64_t m_outRevision = 0;
