@@ -8,8 +8,33 @@
 #include <cmath>
 #include <complex>
 #include <numbers>
+#include <optional>
+
+#include "wpi/filterdesigner/model/PoleZero.hpp"
 
 namespace wpi::filterdesigner {
+
+namespace {
+
+// Corner frequency of the cascade's slowest pole, in Hz. A z-plane pole p
+// corresponds to an s-plane pole at ln(p)·fs, and |ln p| is that pole's
+// distance from the origin, i.e. its corner in rad/sample. Poles at the
+// origin (pure-FIR sections) have no corner and are skipped.
+std::optional<double> LowestPoleCorner(const Sections& sections, double fs) {
+  std::optional<double> lowest;
+  for (const auto& p : ComputePolesZeros(sections).poles) {
+    if (std::abs(p) == 0.0) {
+      continue;
+    }
+    double corner = std::abs(std::log(p)) * fs / (2.0 * std::numbers::pi);
+    if (corner > 0.0 && (!lowest || corner < *lowest)) {
+      lowest = corner;
+    }
+  }
+  return lowest;
+}
+
+}  // namespace
 
 std::optional<FrequencyResponse> FrequencyResponse::Compute(
     const Sections& sections, double fs, int numPoints) {
@@ -18,7 +43,15 @@ std::optional<FrequencyResponse> FrequencyResponse::Compute(
   }
 
   const double nyquist = 0.5 * fs;
-  const double fLow = std::max(fs / static_cast<double>(numPoints), 1e-6);
+  // The grid has to reach below the filter's own corner or the passband and
+  // cutoff of a low-frequency design never appear: fs/numPoints alone puts a
+  // 1 Hz low-pass at 1 kHz and 512 points off the left edge. Start a decade
+  // under the slowest pole, and never above the old fs/numPoints bound.
+  double fLow = fs / static_cast<double>(numPoints);
+  if (auto corner = LowestPoleCorner(sections, fs)) {
+    fLow = std::min(fLow, *corner / 10.0);
+  }
+  fLow = std::max(fLow, 1e-6);
   const double logLow = std::log10(fLow);
   const double logHigh = std::log10(nyquist);
 

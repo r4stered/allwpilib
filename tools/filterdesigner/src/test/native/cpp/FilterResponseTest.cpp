@@ -82,6 +82,38 @@ TEST_CASE("FilterResponseTest ButterworthLowPassHasMonotonicFalloff",
   }
 }
 
+TEST_CASE("FilterResponseTest GridReachesBelowALowCutoff", "[filterdesigner]") {
+  // A 1 Hz low-pass at 1 kHz: fs/numPoints alone would start the grid near
+  // 2 Hz, past the cutoff, so the passband would never be plotted.
+  auto filter = SectionsOf(
+      BiquadFilter::Butterworth(BiquadFilter::Kind::LowPass, 2, 1000_Hz, 1_Hz));
+  auto resp = FrequencyResponse::Compute(filter, 1000.0, 512);
+  REQUIRE(resp);
+  // A decade below the ~1 Hz pole corner.
+  CHECK(resp->frequencies.front() < 0.12);
+  CHECK(resp->frequencies.front() > 0.0);
+  UNSCOPED_INFO("the first point must sit in the passband");
+  CHECK_NEAR(resp->magnitudesDb.front(), 0.0, 0.1);
+  CHECK_NEAR(resp->frequencies.back(), 500.0, 1e-9);
+  // The cutoff itself lands inside the grid, at -3 dB.
+  auto at = std::find_if(resp->frequencies.begin(), resp->frequencies.end(),
+                         [](double f) { return f >= 1.0; });
+  REQUIRE(at != resp->frequencies.end());
+  size_t idx = std::distance(resp->frequencies.begin(), at);
+  CHECK_NEAR(resp->magnitudesDb[idx], -3.0, 0.5);
+}
+
+TEST_CASE("FilterResponseTest HighCutoffKeepsPointCountBound",
+          "[filterdesigner]") {
+  // When the corner is well above fs/numPoints the old bound stands, so a
+  // plot does not waste its points on decades of flat passband.
+  auto filter = SectionsOf(BiquadFilter::Butterworth(
+      BiquadFilter::Kind::LowPass, 2, 1000_Hz, 100_Hz));
+  auto resp = FrequencyResponse::Compute(filter, 1000.0, 512);
+  REQUIRE(resp);
+  CHECK_NEAR(resp->frequencies.front(), 1000.0 / 512.0, 1e-9);
+}
+
 TEST_CASE("FilterResponseTest NotchDipsAtCenterFrequency", "[filterdesigner]") {
   auto filter = SectionsOf(BiquadFilter::Notch(1000_Hz, 60_Hz, 10.0));
   auto resp = FrequencyResponse::Compute(filter, 1000.0, 4096);
