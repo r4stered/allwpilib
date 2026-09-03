@@ -4,6 +4,8 @@
 
 #include "wpi/filterdesigner/io/NT4Source.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace wpi::filterdesigner {
@@ -32,8 +34,8 @@ void NT4Source::Update() {
     }
   }
   if (!m_frozen && !m_buffer.empty()) {
-    // Nanoseconds per NT convention; SetBufferSeconds guards against
-    // overflow for any reasonable window length.
+    // Nanoseconds per NT convention; SetBufferSeconds bounds the window to
+    // kMaxBufferSeconds, well inside what int64_t nanoseconds can hold.
     int64_t windowNanos = static_cast<int64_t>(m_bufferSeconds * 1e9);
     int64_t cutoff = m_buffer.back().timeNanos - windowNanos;
     while (!m_buffer.empty() && m_buffer.front().timeNanos < cutoff) {
@@ -76,8 +78,8 @@ void NT4Source::Rebuild() {
 }
 
 void NT4Source::SetBufferSeconds(double seconds) {
-  if (seconds > 0.0) {
-    m_bufferSeconds = seconds;
+  if (std::isfinite(seconds) && seconds > 0.0) {
+    m_bufferSeconds = std::min(seconds, kMaxBufferSeconds);
   }
 }
 

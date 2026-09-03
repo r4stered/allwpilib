@@ -364,7 +364,9 @@ void NT4SourceNode::draw() {
 
   ImGui::SetNextItemWidth(kItemWidth);
   float bufferSeconds = static_cast<float>(m_logic->BufferSeconds());
-  if (ImGui::SliderFloat("Window (s)", &bufferSeconds, 1.0f, 120.0f, "%.1f")) {
+  if (ImGui::SliderFloat("Window (s)", &bufferSeconds, 1.0f,
+                         static_cast<float>(NT4Source::kMaxBufferSeconds),
+                         "%.1f")) {
     m_logic->SetBufferSeconds(bufferSeconds);
   }
 

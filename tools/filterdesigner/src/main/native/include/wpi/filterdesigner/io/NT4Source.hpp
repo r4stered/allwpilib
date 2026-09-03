@@ -52,7 +52,20 @@ class NT4Source {
    */
   const Signal* GetSignal() const { return &m_signal; }
 
+  /**
+   * Longest window @ref SetBufferSeconds will store, matching the top of the
+   * node's slider. @ref Update scales the window to nanoseconds, so an
+   * unbounded value from a saved graph would overflow the int64_t cutoff.
+   */
+  static constexpr double kMaxBufferSeconds = 120.0;
+
   double BufferSeconds() const { return m_bufferSeconds; }
+
+  /**
+   * Sets the length of the sliding window, in seconds. A value that is not
+   * finite and positive is ignored, leaving the window unchanged; one above
+   * @ref kMaxBufferSeconds is clamped to it.
+   */
   void SetBufferSeconds(double seconds);
 
   bool Frozen() const { return m_frozen; }

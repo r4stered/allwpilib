@@ -5,6 +5,7 @@
 #include "wpi/filterdesigner/io/NT4Source.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -307,6 +308,40 @@ TEST_CASE("NT4SourceTest RejectsNonPositiveBufferSeconds", "[filterdesigner]") {
   CHECK_DOUBLE_EQ(source.BufferSeconds(), 10.0);
   source.SetBufferSeconds(-1.0);
   CHECK_DOUBLE_EQ(source.BufferSeconds(), 10.0);
+}
+
+TEST_CASE("NT4SourceTest RejectsNonFiniteBufferSeconds", "[filterdesigner]") {
+  NT4Source source{[]() { return std::vector<NT4Source::Sample>{}; }};
+  source.SetBufferSeconds(10.0);
+  source.SetBufferSeconds(std::numeric_limits<double>::infinity());
+  CHECK_DOUBLE_EQ(source.BufferSeconds(), 10.0);
+  source.SetBufferSeconds(std::numeric_limits<double>::quiet_NaN());
+  CHECK_DOUBLE_EQ(source.BufferSeconds(), 10.0);
+}
+
+TEST_CASE("NT4SourceTest ClampsBufferSecondsToMaximum", "[filterdesigner]") {
+  NT4Source source{[]() { return std::vector<NT4Source::Sample>{}; }};
+  // A saved graph can carry any positive double; 1e100 seconds scaled to
+  // nanoseconds is far outside int64_t, so the window has to be clamped
+  // before Update() computes a cutoff from it.
+  source.SetBufferSeconds(1e100);
+  CHECK_DOUBLE_EQ(source.BufferSeconds(), NT4Source::kMaxBufferSeconds);
+}
+
+TEST_CASE("NT4SourceTest ClampedWindowStillTrimsOldSamples",
+          "[filterdesigner]") {
+  std::vector<NT4Source::Sample> samples;
+  // 0 s to 200 s, which straddles the 120 s clamp.
+  for (int i = 0; i <= 20; ++i) {
+    samples.push_back({i * 10'000'000'000, static_cast<double>(i)});
+  }
+  NT4Source source{OneShot(std::move(samples))};
+  source.SetBufferSeconds(1e100);
+  source.Update();
+  // Newest sample is at 200 s, so the cutoff sits at 80 s and the samples
+  // from 0 s through 70 s are gone. An overflowed cutoff would have kept
+  // every sample or dropped them all.
+  CHECK(source.SampleCount() == 13);
 }
 
 TEST_CASE("NT4SourceTest ShrinkingBufferWindowTrimsOldSamplesOnNextUpdate",
