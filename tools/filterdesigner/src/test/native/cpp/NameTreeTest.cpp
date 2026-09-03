@@ -4,6 +4,8 @@
 
 #include "wpi/filterdesigner/nodes/NameTree.hpp"
 
+#include <algorithm>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -86,6 +88,34 @@ TEST_CASE("NameTreeTest ANodeCanBeBothAnEntryAndABranch", "[filterdesigner]") {
   CHECK(foo->fullPath == "/foo");
   REQUIRE(foo->children.size() == 1);
   CHECK(foo->children[0].fullPath == "/foo/bar");
+}
+
+TEST_CASE("NameTreeTest NamesThatSplitAlikeKeepSeparateRows",
+          "[filterdesigner]") {
+  // "/foo" and "foo" both split to {"foo"}. Each entry must keep a row of
+  // its own, or the later one hides the earlier from the picker for good.
+  std::vector<NameTreeItem> items{{"/foo", "double", true},
+                                  {"foo", "int64", true}};
+  NameTreeNode root = BuildNameTree(items);
+  REQUIRE(root.children.size() == 2u);
+  CHECK(root.children[0].name == "foo");
+  CHECK(root.children[1].name == "foo");
+  std::vector<std::string> paths{root.children[0].fullPath,
+                                 root.children[1].fullPath};
+  std::ranges::sort(paths);
+  CHECK(paths == std::vector<std::string>{"/foo", "foo"});
+}
+
+TEST_CASE("NameTreeTest ABranchStillTakesTheLeafOfItsOwnName",
+          "[filterdesigner]") {
+  // The sibling rule must not split "/foo" from the branch "/foo/bar" made.
+  std::vector<NameTreeItem> items{{"/foo/bar", "double", true},
+                                  {"/foo", "double", true}};
+  NameTreeNode root = BuildNameTree(items);
+  REQUIRE(root.children.size() == 1u);
+  CHECK(root.children[0].fullPath == "/foo");
+  REQUIRE(root.children[0].children.size() == 1u);
+  CHECK(root.children[0].children[0].fullPath == "/foo/bar");
 }
 
 TEST_CASE("NameTreeTest IgnoresNamesThatSplitToNothing", "[filterdesigner]") {

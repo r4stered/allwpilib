@@ -59,8 +59,9 @@ struct NameTreeNode {
  * exporter, which files the same wpilog entries.
  *
  * Empty segments are dropped and a name that splits to nothing is skipped.
- * Children are sorted by name at every level, so a wpilog's log-order entry
- * list still renders alphabetically.
+ * Two names that split alike — "/foo" and "foo" — each keep a row of their
+ * own. Children are sorted by name at every level, so a wpilog's log-order
+ * entry list still renders alphabetically.
  *
  * The returned root is a container: callers render @c root.children.
  */

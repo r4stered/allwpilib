@@ -53,12 +53,23 @@ NameTreeNode BuildNameTree(std::span<const NameTreeItem> items) {
     NameTreeNode* cursor = &root;
     for (std::size_t i = 0; i < parts.size(); ++i) {
       const std::string_view part = parts[i];
+      const bool leaf = i + 1 == parts.size();
       auto it = std::ranges::find(cursor->children, part, &NameTreeNode::name);
+      if (leaf) {
+        // Two names can split to the same segments — "/foo" and "foo", or
+        // "NT:/x" and "NT/x". A leaf takes the node of its name only while
+        // that node stands for nothing else; otherwise it gets a sibling, so
+        // neither entry hides the other from the picker.
+        it = std::ranges::find_if(cursor->children, [&](const NameTreeNode& n) {
+          return n.name == part &&
+                 (n.fullPath.empty() || n.fullPath == item.name);
+        });
+      }
       if (it == cursor->children.end()) {
         cursor->children.emplace_back().name = part;
         it = cursor->children.end() - 1;
       }
-      if (i + 1 == parts.size()) {
+      if (leaf) {
         it->fullPath = std::string{item.name};
         it->type = std::string{item.type};
         it->label = it->name + "  [" + it->type + "]";
