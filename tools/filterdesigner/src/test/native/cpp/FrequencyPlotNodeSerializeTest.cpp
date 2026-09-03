@@ -82,6 +82,33 @@ TEST_CASE("FrequencyPlotNodeSerializeTest SizeClampedToMinOnLoad",
                  FrequencyPlotNodeLogic::kMinPlotHeight);
 }
 
+TEST_CASE("FrequencyPlotNodeSerializeTest OutOfFloatRangeSizeKeepsDefault",
+          "[filterdesigner]") {
+  // Narrowing 1e100 to a float is undefined and yields an infinity, which
+  // the lower-bound clamp happily keeps and ImPlot is then asked to draw at.
+  NodeRegistry reg;
+  FrequencyPlotNode::Register(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FrequencyPlot", "pos": [0, 0],
+       "plotWidth": 1e100, "plotHeight": 1e999}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  auto* loaded = dynamic_cast<FrequencyPlotNode*>(restored.FindNodeById(1));
+  REQUIRE(loaded != nullptr);
+  FrequencyPlotNodeLogic fresh;
+  CHECK_FLOAT_EQ(loaded->Logic().plotWidth, fresh.plotWidth);
+  CHECK_FLOAT_EQ(loaded->Logic().plotHeight, fresh.plotHeight);
+}
+
 TEST_CASE("FrequencyPlotNodeSerializeTest ConsumesUpstreamSignalSpectrum",
           "[filterdesigner]") {
   // The math draw() would run, on the wire content it would run it against —

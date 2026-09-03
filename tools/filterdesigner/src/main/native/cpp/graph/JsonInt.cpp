@@ -4,6 +4,7 @@
 
 #include "wpi/filterdesigner/graph/JsonInt.hpp"
 
+#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -38,6 +39,27 @@ std::optional<int> ReadIntField(const wpi::util::json& obj,
     return std::nullopt;
   }
   return ReadJsonInt(*value);
+}
+
+std::optional<float> ReadJsonFloat(const wpi::util::json& value) {
+  if (!value.is_number()) {
+    return std::nullopt;
+  }
+  const double v = value.get_number();
+  if (!std::isfinite(v) ||
+      std::abs(v) > static_cast<double>(std::numeric_limits<float>::max())) {
+    return std::nullopt;
+  }
+  return static_cast<float>(v);
+}
+
+std::optional<float> ReadFloatField(const wpi::util::json& obj,
+                                    std::string_view key) {
+  const wpi::util::json* value = obj.lookup(key);
+  if (!value) {
+    return std::nullopt;
+  }
+  return ReadJsonFloat(*value);
 }
 
 }  // namespace wpi::filterdesigner

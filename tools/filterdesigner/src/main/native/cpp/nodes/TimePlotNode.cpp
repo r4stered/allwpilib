@@ -7,12 +7,14 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include <ImNodeFlow.h>
 
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/graph/JsonInt.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
 #include "wpi/filterdesigner/nodes/PlotPalette.hpp"
@@ -69,13 +71,11 @@ void TimePlotNode::DeserializeParams(const wpi::util::json& obj) {
   if (const auto* p = obj.lookup("showLegend"); p && p->is_bool()) {
     m_logic->showLegend = p->get_bool();
   }
-  if (const auto* p = obj.lookup("plotWidth"); p && p->is_number()) {
-    m_logic->plotWidth = std::max(TimePlotNodeLogic::kMinPlotWidth,
-                                  static_cast<float>(p->get_number()));
+  if (const std::optional<float> v = ReadFloatField(obj, "plotWidth")) {
+    m_logic->plotWidth = std::max(TimePlotNodeLogic::kMinPlotWidth, *v);
   }
-  if (const auto* p = obj.lookup("plotHeight"); p && p->is_number()) {
-    m_logic->plotHeight = std::max(TimePlotNodeLogic::kMinPlotHeight,
-                                   static_cast<float>(p->get_number()));
+  if (const std::optional<float> v = ReadFloatField(obj, "plotHeight")) {
+    m_logic->plotHeight = std::max(TimePlotNodeLogic::kMinPlotHeight, *v);
   }
 }
 

@@ -9,6 +9,9 @@
 
 #include "wpi/util/json.hpp"
 
+// Range-checked readers for the numeric scalars a design file carries. Every
+// one of them refuses a value its target type cannot represent, so a caller
+// keeps its default rather than casting undefined behaviour into a field.
 namespace wpi::filterdesigner {
 
 /**
@@ -29,5 +32,25 @@ std::optional<int> ReadJsonInt(const wpi::util::json& value);
  */
 std::optional<int> ReadIntField(const wpi::util::json& obj,
                                 std::string_view key);
+
+/**
+ * Reads a JSON value as a float, or nothing if it is not one.
+ *
+ * Any JSON number qualifies, but only if it is finite and small enough for
+ * a float to hold: narrowing a larger double is undefined and in practice
+ * yields an infinity, which then flows into geometry — a node position, a
+ * plot size — that nothing downstream checks again. A number too large for
+ * the parser's own double arrives as an infinity already, and is refused
+ * the same way.
+ */
+std::optional<float> ReadJsonFloat(const wpi::util::json& value);
+
+/**
+ * Looks up @a key in @a obj and reads it with ReadJsonFloat. Empty when the
+ * key is absent or the value is not a float the type can hold, so a caller
+ * keeps its default in both cases.
+ */
+std::optional<float> ReadFloatField(const wpi::util::json& obj,
+                                    std::string_view key);
 
 }  // namespace wpi::filterdesigner

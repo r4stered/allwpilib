@@ -8,6 +8,7 @@
 #include <array>
 #include <format>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -22,7 +23,6 @@
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 #include <cstdio>
 #include <limits>
-#include <optional>
 
 #include <imgui.h>
 #include <implot.h>
@@ -77,13 +77,11 @@ void BodePlotNode::DeserializeParams(const wpi::util::json& obj) {
     m_logic->numPoints = std::clamp(*v, BodePlotNodeLogic::kMinPoints,
                                     BodePlotNodeLogic::kMaxPoints);
   }
-  if (const auto* p = obj.lookup("plotWidth"); p && p->is_number()) {
-    m_logic->plotWidth = std::max(BodePlotNodeLogic::kMinPlotWidth,
-                                  static_cast<float>(p->get_number()));
+  if (const std::optional<float> v = ReadFloatField(obj, "plotWidth")) {
+    m_logic->plotWidth = std::max(BodePlotNodeLogic::kMinPlotWidth, *v);
   }
-  if (const auto* p = obj.lookup("plotHeight"); p && p->is_number()) {
-    m_logic->plotHeight = std::max(BodePlotNodeLogic::kMinPlotHeight,
-                                   static_cast<float>(p->get_number()));
+  if (const std::optional<float> v = ReadFloatField(obj, "plotHeight")) {
+    m_logic->plotHeight = std::max(BodePlotNodeLogic::kMinPlotHeight, *v);
   }
 }
 
