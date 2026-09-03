@@ -92,9 +92,21 @@ std::optional<Signal> WpiLogSource::LoadEntryRaw(std::string_view name) const {
   // An entry id belongs to a name only between its Start and Finish records;
   // a Finish'd id may be handed to a different name later in the file. So
   // rather than matching on every id the name ever held, walk the control
-  // records alongside the data and keep the set of ids live for this name.
+  // records alongside the data and keep the lifetimes live for this name.
   // Usually one, so linear search is fine.
-  std::vector<int> liveIds;
+  //
+  // Each carries the type its own Start announced: once an entry has been
+  // finished, the writer lets the same name start again under a different
+  // type (DataLog::StartImpl only rejects a mismatch while the entry is
+  // still referenced), and decoding a later int64 lifetime as the double the
+  // name opened with would bit-cast the payload into nonsense.
+  struct Lifetime {
+    int id;
+    std::string type;
+  };
+  std::vector<Lifetime> live;
+  bool sawSample = false;
+  bool allBoolean = true;
   for (const auto& record : *m_reader) {
     if (record.IsStart()) {
       wpi::log::StartRecordData start;
@@ -102,45 +114,53 @@ std::optional<Signal> WpiLogSource::LoadEntryRaw(std::string_view name) const {
         continue;
       }
       // Whoever the id was live for before, it belongs to this name now.
-      std::erase(liveIds, start.entry);
+      std::erase_if(live,
+                    [&](const Lifetime& l) { return l.id == start.entry; });
       if (start.name == name) {
-        liveIds.push_back(start.entry);
+        live.push_back({start.entry, std::string{start.type}});
       }
       continue;
     }
     if (record.IsFinish()) {
       int finished = 0;
       if (record.GetFinishEntry(&finished)) {
-        std::erase(liveIds, finished);
+        std::erase_if(live,
+                      [&](const Lifetime& l) { return l.id == finished; });
       }
       continue;
     }
     if (record.IsControl()) {
       continue;
     }
-    if (std::find(liveIds.begin(), liveIds.end(), record.GetEntry()) ==
-        liveIds.end()) {
+    const auto lifetime =
+        std::ranges::find(live, record.GetEntry(), &Lifetime::id);
+    if (lifetime == live.end()) {
       continue;
     }
+    const std::string& recordType = lifetime->type;
     double value = 0.0;
     bool ok = false;
-    if (type == "double") {
+    if (recordType == "double") {
       ok = record.GetDouble(&value);
-    } else if (type == "float") {
+    } else if (recordType == "float") {
       float f = 0.0f;
       ok = record.GetFloat(&f);
       value = f;
-    } else if (type == "int64") {
+    } else if (recordType == "int64") {
       int64_t i = 0;
       ok = record.GetInteger(&i);
       value = static_cast<double>(i);
-    } else if (type == "boolean") {
+    } else if (recordType == "boolean") {
       bool b = false;
       ok = record.GetBoolean(&b);
       value = b ? 1.0 : 0.0;
     }
     if (!ok) {
       continue;
+    }
+    sawSample = true;
+    if (recordType != "boolean") {
+      allBoolean = false;
     }
     sig.timestamps.push_back(record.GetTimestamp() * 1e-9);
     sig.values.push_back(value);
@@ -167,8 +187,9 @@ std::optional<Signal> WpiLogSource::LoadEntryRaw(std::string_view name) const {
     sig.values = std::move(values);
   }
   // Integers stay continuous: an int64 entry is more often a count than a
-  // state enum.
-  sig.discrete = type == "boolean";
+  // state enum. A name whose lifetimes disagree only holds still if every
+  // one of them that produced a sample was boolean.
+  sig.discrete = sawSample ? allBoolean : type == "boolean";
   return sig;
 }
 

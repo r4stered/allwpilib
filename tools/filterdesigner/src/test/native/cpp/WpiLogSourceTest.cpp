@@ -438,6 +438,17 @@ class RawWpiLog {
     Record(id, micros, payload);
   }
 
+  void Int64(int id, int64_t value, int64_t micros) {
+    std::vector<uint8_t> payload(8);
+    std::memcpy(payload.data(), &value, 8);
+    Record(id, micros, payload);
+  }
+
+  void Boolean(int id, bool value, int64_t micros) {
+    std::vector<uint8_t> payload{static_cast<uint8_t>(value ? 1 : 0)};
+    Record(id, micros, payload);
+  }
+
   std::vector<uint8_t> bytes;
 
  private:
@@ -489,6 +500,73 @@ TEST_CASE("WpiLogSourceTest ReusedIdOnlyMatchesWhileLiveForName",
   REQUIRE(second->values.size() == 2u);
   CHECK_DOUBLE_EQ(second->values[0], 20.0);
   CHECK_DOUBLE_EQ(second->values[1], 21.0);
+}
+
+TEST_CASE("WpiLogSourceTest RestartedEntryDecodedWithItsOwnType",
+          "[filterdesigner]") {
+  // Once an entry is finished its name may start again under another type —
+  // DataLog::StartImpl only refuses a mismatch while the entry is still
+  // referenced. Both lifetimes here are eight bytes wide, so decoding the
+  // second with the first's type does not fail, it just bit-casts a 7 into
+  // a denormal near 3.5e-323.
+  RawWpiLog raw;
+  raw.Start(1, "x", "double", 1'000);
+  raw.Double(1, 2.5, 2'000);
+  raw.Finish(1, 3'000);
+  raw.Start(1, "x", "int64", 4'000);
+  raw.Int64(1, 7, 5'000);
+
+  auto src = WpiLogSource::FromBuffer(raw.bytes);
+  REQUIRE(src.has_value());
+
+  auto sig = src->LoadEntryRaw("x");
+  REQUIRE(sig.has_value());
+  REQUIRE(sig->values.size() == 2u);
+  CHECK_DOUBLE_EQ(sig->values[0], 2.5);
+  CHECK_DOUBLE_EQ(sig->values[1], 7.0);
+  UNSCOPED_INFO("a name with a non-boolean lifetime is not discrete");
+  CHECK_FALSE(sig->discrete);
+}
+
+TEST_CASE("WpiLogSourceTest RestartedEntryOfAnotherWidthIsNotDropped",
+          "[filterdesigner]") {
+  // A boolean payload is one byte, so decoding it as the double the name
+  // opened with fails outright and the samples vanish without a trace.
+  RawWpiLog raw;
+  raw.Start(1, "y", "double", 1'000);
+  raw.Double(1, 1.5, 2'000);
+  raw.Finish(1, 3'000);
+  raw.Start(1, "y", "boolean", 4'000);
+  raw.Boolean(1, true, 5'000);
+  raw.Boolean(1, false, 6'000);
+
+  auto src = WpiLogSource::FromBuffer(raw.bytes);
+  REQUIRE(src.has_value());
+
+  auto sig = src->LoadEntryRaw("y");
+  REQUIRE(sig.has_value());
+  REQUIRE(sig->values.size() == 3u);
+  CHECK_DOUBLE_EQ(sig->values[0], 1.5);
+  CHECK_DOUBLE_EQ(sig->values[1], 1.0);
+  CHECK_DOUBLE_EQ(sig->values[2], 0.0);
+}
+
+TEST_CASE("WpiLogSourceTest AllBooleanLifetimesStayDiscrete",
+          "[filterdesigner]") {
+  RawWpiLog raw;
+  raw.Start(1, "b", "boolean", 1'000);
+  raw.Boolean(1, true, 2'000);
+  raw.Finish(1, 3'000);
+  raw.Start(1, "b", "boolean", 4'000);
+  raw.Boolean(1, false, 5'000);
+
+  auto src = WpiLogSource::FromBuffer(raw.bytes);
+  REQUIRE(src.has_value());
+
+  auto sig = src->LoadEntryRaw("b");
+  REQUIRE(sig.has_value());
+  REQUIRE(sig->values.size() == 2u);
+  CHECK(sig->discrete);
 }
 
 TEST_CASE_METHOD(WpiLogSourceTest, "WpiLogSourceTest FromFileRoundTrips",
