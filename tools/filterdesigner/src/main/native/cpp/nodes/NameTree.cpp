@@ -55,7 +55,7 @@ NameTreeNode BuildNameTree(std::span<const NameTreeItem> items) {
       const std::string_view part = parts[i];
       auto it = std::ranges::find(cursor->children, part, &NameTreeNode::name);
       if (it == cursor->children.end()) {
-        cursor->children.push_back(NameTreeNode{.name = std::string{part}});
+        cursor->children.emplace_back().name = part;
         it = cursor->children.end() - 1;
       }
       if (i + 1 == parts.size()) {
