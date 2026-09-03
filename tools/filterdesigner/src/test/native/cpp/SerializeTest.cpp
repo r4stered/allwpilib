@@ -314,6 +314,33 @@ TEST_CASE("SerializeTest NonNumericPosSkippedWithWarning", "[filterdesigner]") {
   CHECK(graph.Nodes().empty());
 }
 
+TEST_CASE("SerializeTest OutOfFloatRangePosSkippedWithWarning",
+          "[filterdesigner]") {
+  // ImNodeFlow's positions are floats; 1e100 is a perfectly good JSON number
+  // that no float can hold, and narrowing it is undefined behaviour.
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FakeSource", "pos": [1e100, 0]},
+      {"id": 2, "type": "FakeSink", "pos": [0, 1e999]}
+    ],
+    "links": []
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  // 1e999 overflows the JSON reader's double to infinity, which is still a
+  // number as far as is_number() is concerned.
+  UNSCOPED_INFO("both nodes must be skipped, with a warning each");
+  CHECK(result.warnings.size() == 2);
+  CHECK(graph.Nodes().empty());
+}
+
 TEST_CASE("SerializeTest GraphResetCallbackFiresOnDeserialize",
           "[filterdesigner]") {
   // GraphEditor re-attaches the CreationPopup from this hook, the

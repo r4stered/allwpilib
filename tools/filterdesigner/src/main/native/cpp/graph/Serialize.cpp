@@ -4,6 +4,7 @@
 
 #include "wpi/filterdesigner/graph/Serialize.hpp"
 
+#include <cmath>
 #include <fstream>
 #include <ios>
 #include <limits>
@@ -43,6 +44,22 @@ std::optional<int> ReadGraphInt(const json& value) {
     return std::nullopt;
   }
   return v;
+}
+
+// ImNodeFlow keeps node positions in floats and does canvas arithmetic on
+// them every frame. Narrowing a double outside the float range is undefined
+// to begin with, and the infinity it produces in practice puts the node
+// somewhere the canvas can never scroll to.
+std::optional<float> ReadCoord(const json& value) {
+  if (!value.is_number()) {
+    return std::nullopt;
+  }
+  const double v = value.get_number();
+  if (!std::isfinite(v) ||
+      std::abs(v) > static_cast<double>(std::numeric_limits<float>::max())) {
+    return std::nullopt;
+  }
+  return static_cast<float>(v);
 }
 
 // ImFlow::BaseNode's own inPin/outPin assert and UB-deref on a miss, which
@@ -169,13 +186,15 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     const int id = *parsedId;
     const std::string& type = typeNode->get_string();
     const auto& pos = posNode->get_array();
-    if (!pos[0].is_number() || !pos[1].is_number()) {
+    const std::optional<float> px = ReadCoord(pos[0]);
+    const std::optional<float> py = ReadCoord(pos[1]);
+    if (!px || !py) {
       result.warnings.emplace_back(
-          "Skipping node with non-numeric pos coordinates");
+          "Skipping node whose pos coordinates are not numbers the canvas "
+          "can hold");
       continue;
     }
-    ImVec2 p{static_cast<float>(pos[0].get_number()),
-             static_cast<float>(pos[1].get_number())};
+    ImVec2 p{*px, *py};
 
     if (!seenIds.insert(id).second) {
       result.warnings.emplace_back("Duplicate node id " + std::to_string(id) +
