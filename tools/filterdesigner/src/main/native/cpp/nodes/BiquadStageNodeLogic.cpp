@@ -238,7 +238,13 @@ const Signal* BiquadStageNodeLogic::Filtered(const Signal* input) const {
 
   Signal out;
   out.timestamps = input->timestamps;
-  out.values = ApplyFilter(input->values, design->sections);
+  // A live source hands us a sliding window of a signal that was already
+  // running before the window opened, and we re-filter the whole buffer
+  // every revision; a zero-state start would park the filter's startup
+  // transient at the leading edge and drag it along as the window slides.
+  out.values =
+      ApplyFilter(input->values, design->sections,
+                  input->live ? FilterStart::SteadyState : FilterStart::Zero);
   out.name = input->name + StageKindSuffix(stage.kind);
   out.sampleRate = input->sampleRate;
   // Filtering keeps the input's timestamps, so it inherits their grid

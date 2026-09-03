@@ -11,15 +11,34 @@
 
 namespace wpi::filterdesigner {
 
+/** How @ref ApplyFilter primes the cascade before the first sample. */
+enum class FilterStart {
+  /**
+   * Zero state, so the output opens with the filter's startup transient.
+   * Correct whenever the first sample really is the first the filter would
+   * ever see: a generated impulse or step, or a log read from its start.
+   */
+  Zero,
+  /**
+   * Steady state for the first sample. Meant for a sliding window over a
+   * signal that was already running before the window opened: such a source
+   * re-filters its whole buffer on every revision, and a zero start would
+   * redraw the startup transient at the leading edge as the window slides,
+   * which the equivalent filter running on the robot never shows.
+   */
+  SteadyState
+};
+
 /**
- * Runs @a samples through a fresh @c BiquadFilter cascade built from
- * @a sections. The filter state starts at zero, so early samples exhibit
- * the usual transient response.
+ * Runs @a samples through a @c BiquadFilter cascade built from @a sections.
  *
- * @return Filtered samples, same length as @a samples. Empty @a sections
- *         returns @a samples unchanged.
+ * @param samples  Input samples.
+ * @param sections Cascade to apply. Empty returns @a samples unchanged.
+ * @param start    Initial filter state; see @ref FilterStart.
+ * @return Filtered samples, same length as @a samples.
  */
 std::vector<double> ApplyFilter(std::span<const double> samples,
-                                const Sections& sections);
+                                const Sections& sections,
+                                FilterStart start = FilterStart::Zero);
 
 }  // namespace wpi::filterdesigner

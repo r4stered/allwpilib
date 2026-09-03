@@ -152,6 +152,35 @@ TEST_CASE("BiquadStageNodeLogicTest FilteredCarriesTheTransientFlag",
   CHECK_FALSE(steadyOut->transient);
 }
 
+TEST_CASE("BiquadStageNodeLogicTest FilteredWarmStartsALiveInput",
+          "[filterdesigner]") {
+  // A live source keeps a sliding window of a signal that was already
+  // running, so the filter must not restage its startup transient at the
+  // window's leading edge every time the window moves.
+  BiquadStageNodeLogic logic;
+  Signal live;
+  live.name = "x";
+  live.sampleRate = 1000.0;
+  live.quality = wpi::filterdesigner::GridQuality::Exact(1000.0);
+  live.revision = 1;
+  live.live = true;
+  for (std::size_t i = 0; i < 64; ++i) {
+    live.timestamps.push_back(static_cast<double>(i) / 1000.0);
+    live.values.push_back(3.0);
+  }
+  const Signal* out = logic.Filtered(&live);
+  REQUIRE(out != nullptr);
+  CHECK_NEAR(out->values.front(), 3.0, 1e-9);
+
+  Signal offline = live;
+  offline.live = false;
+  offline.revision = 2;
+  const Signal* offlineOut = logic.Filtered(&offline);
+  REQUIRE(offlineOut != nullptr);
+  // A file or a generator really does start here, transient and all.
+  CHECK(offlineOut->values.front() < 1.0);
+}
+
 TEST_CASE("BiquadStageNodeLogicTest FilteredRepeatPullReturnsConsistentResult",
           "[filterdesigner]") {
   BiquadStageNodeLogic logic;

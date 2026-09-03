@@ -18,6 +18,7 @@
 namespace {
 
 using wpi::filterdesigner::ApplyFilter;
+using wpi::filterdesigner::FilterStart;
 using wpi::filterdesigner::Sections;
 using wpi::math::BiquadFilter;
 using namespace wpi::units;
@@ -93,6 +94,74 @@ TEST_CASE("ApplyFilterTest LowPassAttenuatesHighFrequency",
     outEnergy += out[i] * out[i];
   }
   CHECK(outEnergy / inEnergy < 1e-3);
+}
+
+TEST_CASE("ApplyFilterTest SteadyStateStartHoldsConstantInput",
+          "[filterdesigner]") {
+  auto filter = SectionsOf(BiquadFilter::Butterworth(
+      BiquadFilter::Kind::LowPass, 4, 1000_Hz, 10_Hz));
+  std::vector<double> in(200, 2.5);
+  auto zero = ApplyFilter(in, filter, FilterStart::Zero);
+  auto seeded = ApplyFilter(in, filter, FilterStart::SteadyState);
+  // Zero state has to climb to the DC gain; a seeded filter is already there
+  // on the very first sample.
+  CHECK(zero.front() < 1.0);
+  for (size_t i = 0; i < seeded.size(); ++i) {
+    UNSCOPED_INFO("sample " << i);
+    CHECK_NEAR(seeded[i], 2.5, 1e-9);
+  }
+}
+
+TEST_CASE("ApplyFilterTest SteadyStateStartMatchesAContinuousRun",
+          "[filterdesigner]") {
+  constexpr double kFs = 1000.0;
+  constexpr int kSettled = 400;
+  constexpr int kN = 700;
+  auto filter = SectionsOf(BiquadFilter::Butterworth(
+      BiquadFilter::Kind::LowPass, 4, hertz_t{kFs}, 20_Hz));
+  // A signal that sat at 1.0 long enough for the filter to settle before the
+  // window opens, then moves. At kSettled the true running state is exactly
+  // the DC steady state for 1.0, which is what the seed reconstructs.
+  std::vector<double> full(kN, 1.0);
+  for (int n = kSettled; n < kN; ++n) {
+    full[n] =
+        1.0 + std::sin(2.0 * std::numbers::pi * 5.0 * (n - kSettled) / kFs);
+  }
+  auto reference = ApplyFilter(full, filter);
+  std::vector<double> window(full.begin() + kSettled, full.end());
+  auto zero = ApplyFilter(window, filter, FilterStart::Zero);
+  auto seeded = ApplyFilter(window, filter, FilterStart::SteadyState);
+  // The zero start reruns the startup transient the continuous filter left
+  // behind hundreds of samples ago.
+  CHECK(std::abs(zero.front() - reference[kSettled]) > 0.5);
+  // Not exact: the seed solves for the steady state in closed form while the
+  // reference accumulates it sample by sample, so the two agree only to
+  // within the rounding those different routes pick up.
+  for (size_t i = 0; i < seeded.size(); ++i) {
+    UNSCOPED_INFO("sample " << i);
+    CHECK_NEAR(seeded[i], reference[kSettled + i], 1e-6);
+  }
+}
+
+TEST_CASE("ApplyFilterTest SteadyStateStartToleratesEmptyInput",
+          "[filterdesigner]") {
+  auto filter = SectionsOf(BiquadFilter::Butterworth(
+      BiquadFilter::Kind::LowPass, 4, 1000_Hz, 100_Hz));
+  std::vector<double> in;
+  auto out = ApplyFilter(in, filter, FilterStart::SteadyState);
+  CHECK(out.empty());
+}
+
+TEST_CASE("ApplyFilterTest SteadyStateStartFallsBackOnADegenerateCascade",
+          "[filterdesigner]") {
+  // y[n] = x[n] + y[n-1]: a pole at z = 1, so the cascade has no finite DC
+  // steady state and the seed has nothing to solve for.
+  Sections integrator{{1.0, 0.0, 0.0, -1.0, 0.0}};
+  std::vector<double> in(10, 1.0);
+  auto out = ApplyFilter(in, integrator, FilterStart::SteadyState);
+  // Zero state instead, which for a running sum is the plain 1, 2, 3, ...
+  CHECK_NEAR(out.front(), 1.0, 1e-12);
+  CHECK_NEAR(out.back(), 10.0, 1e-12);
 }
 
 }  // namespace
