@@ -103,6 +103,7 @@ void GraphEditor::PollDialogs() {
       std::string err = SaveGraphToFile(path, *m_graph);
       if (err.empty()) {
         m_status = "Saved: " + path;
+        m_loadWarnings.clear();
         m_lastPath = std::move(path);
       } else {
         m_status = std::move(err);
@@ -117,10 +118,13 @@ void GraphEditor::PollDialogs() {
           LoadGraphFromFile(results.front(), *m_graph, *m_registry);
       // DeserializeGraph calls Graph::Reset; the popup re-Attach happens
       // automatically via the SetOnReset hook registered in our ctor.
+      m_loadWarnings.clear();
       if (dr.ok()) {
         m_status = "Loaded: " + results.front();
-        if (!dr.warnings.empty()) {
-          m_status += " (" + std::to_string(dr.warnings.size()) + " warnings)";
+        m_loadWarnings = std::move(dr.warnings);
+        if (!m_loadWarnings.empty()) {
+          m_status += " (" + std::to_string(m_loadWarnings.size()) +
+                      " warnings — hover for details)";
         }
         m_lastPath = results.front();
       } else {
@@ -147,6 +151,13 @@ void GraphEditor::Display() {
   if (!m_status.empty()) {
     ImGui::SameLine();
     ImGui::TextDisabled("%s", m_status.c_str());
+    if (!m_loadWarnings.empty() && ImGui::IsItemHovered()) {
+      ImGui::BeginTooltip();
+      for (const std::string& warning : m_loadWarnings) {
+        ImGui::TextUnformatted(warning.c_str());
+      }
+      ImGui::EndTooltip();
+    }
   }
   ImGui::Separator();
 

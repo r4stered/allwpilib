@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace pfd {
 class open_file;
@@ -58,6 +59,12 @@ class GraphEditor {
   std::string m_defaultDir;
   std::string m_lastPath;
   std::string m_status;
+  /**
+   * What the last load skipped, shown when the status text is hovered so
+   * the user can see which nodes or links are gone before saving over the
+   * file. Cleared by the next save or load.
+   */
+  std::vector<std::string> m_loadWarnings;
 };
 
 }  // namespace wpi::filterdesigner
