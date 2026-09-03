@@ -151,9 +151,12 @@ void FrequencyPlotNode::draw() {
       int count =
           static_cast<int>(std::min<size_t>(spec->frequencies.size() - firstBin,
                                             std::numeric_limits<int>::max()));
-      const std::string label = (signals[i] && !signals[i]->name.empty())
-                                    ? signals[i]->name
-                                    : std::string{kInputNames[i]};
+      // Hidden pin suffix: two inputs sharing a name would otherwise share
+      // one ImPlot item, and so one legend entry and visibility toggle.
+      const std::string label = ((signals[i] && !signals[i]->name.empty())
+                                     ? signals[i]->name
+                                     : std::string{kInputNames[i]}) +
+                                "##" + kInputNames[i];
       ImPlot::PlotLine(label.c_str(), spec->frequencies.data() + firstBin,
                        spec->magnitudesDb.data() + firstBin, count,
                        {ImPlotProp_LineColor, PlotPaletteVec4(i)});

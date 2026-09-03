@@ -141,9 +141,13 @@ void TimePlotNode::draw() {
       }
       int count = static_cast<int>(std::min<size_t>(
           sig->values.size(), std::numeric_limits<int>::max()));
-      // The signal's own name, which distinguishes two logs' entries.
+      // The signal's own name, which distinguishes two logs' entries. The
+      // hidden pin suffix keeps ImPlot's item id unique when two inputs
+      // share a name — two Impulse nodes, say — so each curve gets its own
+      // legend entry and visibility toggle.
       const std::string label =
-          sig->name.empty() ? std::string{kInputNames[i]} : sig->name;
+          (sig->name.empty() ? std::string{kInputNames[i]} : sig->name) + "##" +
+          kInputNames[i];
       ImPlot::PlotLine(label.c_str(), sig->timestamps.data(),
                        sig->values.data(), count,
                        {ImPlotProp_LineColor, PlotPaletteVec4(i)});
