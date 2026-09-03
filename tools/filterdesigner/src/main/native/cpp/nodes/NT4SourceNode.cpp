@@ -195,7 +195,8 @@ void NT4SourceNode::StartClient() {
       m_topicPoller.AddListener(m_topicSub, wpi::nt::EventFlags::TOPIC);
 
   // A loaded graph keeps the topic name but not the subscriber. Subscribing
-  // before discovery completes is fine — values arrive once it is announced.
+  // before discovery completes is fine — values arrive once it is announced,
+  // and RefreshTopics settles the discrete flag then.
   if (!m_logic->TopicName().empty()) {
     Subscribe(m_logic->TopicName());
   }
@@ -238,7 +239,9 @@ void NT4SourceNode::Subscribe(std::string_view topicName) {
                               .sendAll = true,
                               .keepDuplicates = true}));
   m_logic->SetTopicName(topicName);
-  // Boolean topics are held across grid slots rather than interpolated.
+  // Boolean topics are held across grid slots rather than interpolated. A
+  // topic the server hasn't announced yet reads as unassigned here; see
+  // RefreshTopics for the correction.
   m_logic->SetDiscrete(topic.GetType() == wpi::nt::NetworkTableType::BOOLEAN);
   m_logic->Clear();
 }
@@ -258,6 +261,12 @@ void NT4SourceNode::RefreshTopics() {
   m_topics.reserve(info.size());
   for (const auto& t : info) {
     m_topics.push_back({t.name, TypeLabel(t.type)});
+    // Subscribe read the type before the announcement when a loaded graph
+    // reconnected, and recorded a boolean as continuous. Discovery is where
+    // the real type arrives, and every TOPIC event lands here.
+    if (t.name == m_logic->TopicName()) {
+      m_logic->SetDiscrete(t.type == NT_BOOLEAN);
+    }
   }
   RebuildTopicTree();
 }
