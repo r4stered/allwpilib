@@ -273,6 +273,41 @@ TEST_CASE("SerializeTest GraphResetCallbackFiresOnDeserialize",
   CHECK(hits == 2);
 }
 
+TEST_CASE("SerializeTest DuplicateNodeIdSkippedWithWarning",
+          "[filterdesigner]") {
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  // Two nodes claim id 5; the link names it. Only the first may exist, and
+  // the link must land on that one rather than whichever the editor's node
+  // map visits first.
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 5, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 5, "type": "FakeSink", "pos": [50, 0]},
+      {"id": 6, "type": "FakeSink", "pos": [100, 0]}
+    ],
+    "links": [
+      {"src": {"node": 5, "pin": "out"}, "dst": {"node": 6, "pin": "in"}}
+    ]
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(result.warnings.size() == 1u);
+  CHECK(result.warnings[0].find("Duplicate node id 5") != std::string::npos);
+
+  CHECK(graph.Nodes().size() == 2u);
+  CHECK(dynamic_cast<FakeSourceNode*>(graph.FindNodeById(5)) != nullptr);
+  auto links = graph.Links();
+  REQUIRE(links.size() == 1u);
+  CHECK(links[0].srcId == 5);
+  CHECK(links[0].dstId == 6);
+}
+
 TEST_CASE("SerializeTest NewNodesAfterLoadDontCollideWithLoadedIds",
           "[filterdesigner]") {
   NodeRegistry reg;

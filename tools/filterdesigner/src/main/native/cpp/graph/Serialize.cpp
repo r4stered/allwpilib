@@ -10,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 
 #include <ImNodeFlow.h>
@@ -121,6 +122,9 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
 
   graph.Reset();
 
+  // Ids must be unique or link restoration is a coin toss between the
+  // duplicates, silently, and the next save keeps the collision.
+  std::unordered_set<int> seenIds;
   for (const json& entry : nodesNode->get_array()) {
     if (!entry.is_object()) {
       result.warnings.emplace_back("Skipping non-object node entry");
@@ -146,6 +150,12 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     }
     ImVec2 p{static_cast<float>(pos[0].get_number()),
              static_cast<float>(pos[1].get_number())};
+
+    if (!seenIds.insert(id).second) {
+      result.warnings.emplace_back("Duplicate node id " + std::to_string(id) +
+                                   " — skipped");
+      continue;
+    }
 
     const NodeRegistry::Entry* regEntry = registry.FindByTag(type);
     if (!regEntry) {
