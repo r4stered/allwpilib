@@ -345,4 +345,39 @@ TEST_CASE("NT4SourceTest SetNamePropagatesToSignal", "[filterdesigner]") {
   CHECK(source.GetSignal()->name == "/SmartDashboard/foo");
 }
 
+TEST_CASE("NT4SourceTest SetDiscreteRegridsBufferedSamples",
+          "[filterdesigner]") {
+  // A boolean that flipped 0 -> 1 across an unreported slot: the type
+  // arrives from discovery only after the first samples were gridded, and
+  // with no further samples nothing else would rebuild the grid.
+  NT4Source source{OneShot(
+      {{0, 0.0}, {1'000'000, 0.0}, {2'000'000, 0.0}, {4'000'000, 1.0}})};
+  source.Update();
+  const auto* sig = source.GetSignal();
+  REQUIRE(sig->values.size() == 5u);
+  CHECK_NEAR(sig->values[3], 0.5, 1e-12);
+  const auto before = sig->revision;
+
+  source.SetDiscrete(true);
+  CHECK(source.Discrete());
+  REQUIRE(sig->values.size() == 5u);
+  CHECK_DOUBLE_EQ(sig->values[3], 0.0);
+  CHECK(sig->revision > before);
+
+  // Setting the same value again is not a change.
+  const auto after = sig->revision;
+  source.SetDiscrete(true);
+  CHECK(sig->revision == after);
+}
+
+TEST_CASE("NT4SourceTest SetDiscreteOnEmptyBufferOnlySetsFlag",
+          "[filterdesigner]") {
+  NT4Source source{[]() { return std::vector<NT4Source::Sample>{}; }};
+  const auto before = source.GetSignal()->revision;
+  source.SetDiscrete(true);
+  CHECK(source.Discrete());
+  CHECK(source.GetSignal()->values.empty());
+  CHECK(source.GetSignal()->revision == before);
+}
+
 }  // namespace

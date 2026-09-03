@@ -42,10 +42,25 @@ void NT4Source::Update() {
     }
   }
 
-  if (!changed) {
+  if (changed) {
+    Rebuild();
+  }
+}
+
+void NT4Source::SetDiscrete(bool discrete) {
+  if (m_signal.discrete == discrete) {
     return;
   }
+  m_signal.discrete = discrete;
+  // The type of a topic subscribed before the server announced it arrives
+  // after its first samples were gridded, and a boolean that then holds
+  // still would never trigger another Update rebuild.
+  if (!m_buffer.empty()) {
+    Rebuild();
+  }
+}
 
+void NT4Source::Rebuild() {
   m_signal.timestamps.clear();
   m_signal.values.clear();
   m_signal.timestamps.reserve(m_buffer.size());

@@ -286,13 +286,16 @@ void NT4SourceNode::RebuildTopicTree() {
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 
 void NT4SourceNode::draw() {
-  // Unconditionally, so a freshly-picked topic starts filling next frame.
-  m_logic->Update();
-
   // Drain discovery events — any TOPIC event invalidates the announce list.
+  // Before the sample drain: the announcement carrying a topic's real type
+  // lands in the same frame as its first values, and the grid built from
+  // those should already know whether to hold or interpolate.
   if (m_topicListener != 0 && !m_topicPoller.ReadQueue().empty()) {
     RefreshTopics();
   }
+
+  // Unconditionally, so a freshly-picked topic starts filling next frame.
+  m_logic->Update();
 
   const float kItemWidth = 200.0f;
 

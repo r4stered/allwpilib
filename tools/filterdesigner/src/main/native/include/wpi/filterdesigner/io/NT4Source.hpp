@@ -70,11 +70,17 @@ class NT4Source {
    * Marks the subscribed topic as taking only discrete values, so the grid
    * holds them rather than interpolating between them. Set from the topic
    * type when subscribing; survives @ref Clear, which only drops samples.
+   * A change rebuilds the Signal from the buffer, since the grid already
+   * built reflects the old setting and nothing else would redo it while the
+   * topic stays quiet.
    */
   bool Discrete() const { return m_signal.discrete; }
-  void SetDiscrete(bool discrete) { m_signal.discrete = discrete; }
+  void SetDiscrete(bool discrete);
 
  private:
+  /** Regrids the Signal from the buffer and bumps its revision. */
+  void Rebuild();
+
   DrainFn m_drain;
   std::deque<Sample> m_buffer;
   Signal m_signal;
