@@ -4,13 +4,23 @@
 
 #pragma once
 
+#include <array>
+#include <cstdint>
+#include <optional>
+
+#include "wpi/filterdesigner/model/Signal.hpp"
+#include "wpi/filterdesigner/model/Spectrum.hpp"
+
 namespace wpi::filterdesigner {
 
 /**
- * Persisted display options for a FrequencyPlotNode. The spectrum itself is
- * recomputed per frame from the connected Signal wires.
+ * Persisted display options for a FrequencyPlotNode, plus one cached
+ * spectrum per input pin so a static WPILOG signal is transformed once, not
+ * once per frame.
  */
 struct FrequencyPlotNodeLogic {
+  static constexpr int kInputCount = 4;
+
   /** If true (default) the y-axis rescales to the data each frame. */
   bool autoscale = true;
 
@@ -26,6 +36,29 @@ struct FrequencyPlotNodeLogic {
 
   static constexpr float kMinPlotWidth = 240.0f;
   static constexpr float kMinPlotHeight = 140.0f;
+
+  /**
+   * Spectrum of @p sig for input pin @p slot, or nullptr when @p sig is null
+   * or too short or rateless to transform. Recomputed only when the pointer,
+   * revision or sample rate differ from the previous call for that slot; a
+   * live source bumps its revision every frame it drains samples, a log
+   * source only when its window changes. The pointer is valid until the next
+   * call for the same slot.
+   */
+  const Spectrum* SpectrumFor(int slot, const Signal* sig);
+
+  /** Number of FFTs run so far; lets a test see a cache hit. */
+  std::uint64_t SpectrumComputeCount() const { return m_computeCount; }
+
+ private:
+  struct CachedSpectrum {
+    const Signal* input = nullptr;
+    std::uint64_t revision = 0;
+    double sampleRate = 0.0;
+    std::optional<Spectrum> spectrum;
+  };
+  std::array<CachedSpectrum, kInputCount> m_cache;
+  std::uint64_t m_computeCount = 0;
 };
 
 }  // namespace wpi::filterdesigner

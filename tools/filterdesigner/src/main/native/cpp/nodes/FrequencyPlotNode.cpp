@@ -20,7 +20,6 @@
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 #include <cstdio>
 #include <limits>
-#include <optional>
 
 #include <imgui.h>
 #include <implot.h>
@@ -117,18 +116,14 @@ void FrequencyPlotNode::draw() {
     return;
   }
 
-  // Compute spectra up-front so the plot loop is plain plotting. Uniform
+  // Fetch spectra up-front so the plot loop is plain plotting. Uniform
   // sampling is the loaders' job (see Signal::ResampleToGrid), so the only
   // inputs dropped here are those with no usable rate or too few samples. A
   // signal whose gaps were too large to fill still gets an FFT over
   // nonuniform samples; its source node's readout is red.
-  std::array<std::optional<Spectrum>, kInputCount> spectra;
+  std::array<const Spectrum*, kInputCount> spectra{};
   for (int i = 0; i < kInputCount; ++i) {
-    const Signal* sig = signals[i];
-    if (!sig || sig->sampleRate <= 0.0 || sig->values.size() < 2) {
-      continue;
-    }
-    spectra[i] = Spectrum::Compute(sig->values, sig->sampleRate);
+    spectra[i] = m_logic->SpectrumFor(i, signals[i]);
   }
 
   ImVec2 plotSize{m_logic->plotWidth, m_logic->plotHeight};
@@ -145,7 +140,7 @@ void FrequencyPlotNode::draw() {
       ImPlot::SetupLegend(ImPlotLocation_NorthEast);
     }
     for (int i = 0; i < kInputCount; ++i) {
-      const auto& spec = spectra[i];
+      const Spectrum* spec = spectra[i];
       if (!spec) {
         continue;
       }

@@ -25,7 +25,7 @@ class NodeRegistry;
  */
 class FrequencyPlotNode final : public FilterDesignerNode {
  public:
-  static constexpr int kInputCount = 4;
+  static constexpr int kInputCount = FrequencyPlotNodeLogic::kInputCount;
 
   FrequencyPlotNode();
   ~FrequencyPlotNode() override;
