@@ -47,4 +47,28 @@ TEST_CASE("StepNodeSerializeTest ParamsRoundTrip", "[filterdesigner]") {
   CHECK(loaded->Logic().startSample == 5);
 }
 
+TEST_CASE("StepNodeSerializeTest OutOfRangeIntFieldsKeepDefaults",
+          "[filterdesigner]") {
+  NodeRegistry reg;
+  StepNode::Register(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "Step", "pos": [0, 0],
+       "length": 1e100, "startSample": 2.5}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  auto* loaded = dynamic_cast<StepNode*>(restored.FindNodeById(1));
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().length == 200);
+  CHECK(loaded->Logic().startSample == 0);
+}
+
 }  // namespace

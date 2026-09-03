@@ -48,4 +48,26 @@ TEST_CASE("ExportNodeSerializeTest ParamsRoundTrip", "[filterdesigner]") {
   CHECK(loaded->Logic().projectRoot == "/path/to/robot");
 }
 
+TEST_CASE("ExportNodeSerializeTest OutOfRangeLangKeepsDefault",
+          "[filterdesigner]") {
+  NodeRegistry reg;
+  ExportNode::Register(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "Export", "pos": [0, 0], "lang": 2.5}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  auto* loaded = dynamic_cast<ExportNode*>(restored.FindNodeById(1));
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().lang == Language::Cpp);
+}
+
 }  // namespace

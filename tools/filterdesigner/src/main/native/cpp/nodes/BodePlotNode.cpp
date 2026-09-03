@@ -14,6 +14,7 @@
 #include <ImNodeFlow.h>
 
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/graph/JsonInt.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/model/DesignedFilter.hpp"
 #include "wpi/filterdesigner/nodes/PlotPalette.hpp"
@@ -72,9 +73,8 @@ void BodePlotNode::DeserializeParams(const wpi::util::json& obj) {
   if (const auto* p = obj.lookup("showLegend"); p && p->is_bool()) {
     m_logic->showLegend = p->get_bool();
   }
-  if (const auto* p = obj.lookup("numPoints"); p && p->is_number()) {
-    int v = static_cast<int>(p->get_number());
-    m_logic->numPoints = std::clamp(v, BodePlotNodeLogic::kMinPoints,
+  if (auto v = ReadIntField(obj, "numPoints")) {
+    m_logic->numPoints = std::clamp(*v, BodePlotNodeLogic::kMinPoints,
                                     BodePlotNodeLogic::kMaxPoints);
   }
   if (const auto* p = obj.lookup("plotWidth"); p && p->is_number()) {

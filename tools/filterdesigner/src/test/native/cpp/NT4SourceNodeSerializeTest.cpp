@@ -225,4 +225,31 @@ TEST_CASE("NT4SourceNodeSerializeTest SanitizePortCapsAboveMaxOnLoad",
   CHECK(loaded->Logic().port >= 1);
 }
 
+TEST_CASE("NT4SourceNodeSerializeTest OutOfRangeIntFieldsKeepDefaults",
+          "[filterdesigner]") {
+  // A negative team is sanitized after the cast; a value that is not an int
+  // at all never reaches the cast, so the defaults stand instead.
+  NodeRegistry reg;
+  RegisterAll(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "NT4Source", "pos": [0, 0],
+       "serverMode": 1e100, "team": 1e100, "port": 2.5}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  auto* loaded = dynamic_cast<NT4SourceNode*>(restored.FindNodeById(1));
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().serverMode == NT4SourceNodeLogic::ServerMode::Host);
+  CHECK(loaded->Logic().team == 0);
+  CHECK(loaded->Logic().port == 5810);
+}
+
 }  // namespace

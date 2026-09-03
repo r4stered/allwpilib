@@ -209,4 +209,32 @@ TEST_CASE(
   CHECK(anyDifferent);
 }
 
+TEST_CASE("BiquadStageNodeSerializeTest OutOfRangeIntFieldsKeepDefaults",
+          "[filterdesigner]") {
+  // Converting a double outside int's range is undefined, so a huge or
+  // fractional value is refused before any cast and the default stands.
+  NodeRegistry reg;
+  RegisterAll(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "BiquadStage", "pos": [0, 0],
+       "kind": 1e100, "family": -2.5, "order": 1e100, "taps": 2.5}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  auto* loaded = dynamic_cast<BiquadStageNode*>(restored.FindNodeById(1));
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().stage.kind == StageKind::LowPass);
+  CHECK(loaded->Logic().stage.family == Family::Butterworth);
+  CHECK(loaded->Logic().stage.order == 4);
+  CHECK(loaded->Logic().stage.taps == 5);
+}
+
 }  // namespace

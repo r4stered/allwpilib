@@ -75,4 +75,28 @@ TEST_CASE("BodePlotNodeSerializeTest NumPointsClampedOnLoad",
   CHECK(loaded->Logic().numPoints == BodePlotNodeLogic::kMaxPoints);
 }
 
+TEST_CASE("BodePlotNodeSerializeTest OutOfRangeNumPointsKeepsDefault",
+          "[filterdesigner]") {
+  // 1e100 is not an int: converting it is undefined, so it is refused
+  // before the clamp rather than wrapped by the cast.
+  NodeRegistry reg;
+  BodePlotNode::Register(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "BodePlot", "pos": [0, 0], "numPoints": 1e100}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  auto* loaded = dynamic_cast<BodePlotNode*>(restored.FindNodeById(1));
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().numPoints == 512);
+}
+
 }  // namespace

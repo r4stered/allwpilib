@@ -11,6 +11,7 @@
 #include <ImNodeFlow.h>
 
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/graph/JsonInt.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
 
@@ -48,15 +49,13 @@ void StepNode::DeserializeParams(const wpi::util::json& obj) {
   if (const auto* p = obj.lookup("sampleRate"); p && p->is_number()) {
     m_logic->sampleRate = p->get_number();
   }
-  if (const auto* p = obj.lookup("length"); p && p->is_number()) {
-    int v = static_cast<int>(p->get_number());
+  if (auto v = ReadIntField(obj, "length")) {
     m_logic->length =
-        std::clamp(v, StepNodeLogic::kMinLength, StepNodeLogic::kMaxLength);
+        std::clamp(*v, StepNodeLogic::kMinLength, StepNodeLogic::kMaxLength);
   }
-  if (const auto* p = obj.lookup("startSample"); p && p->is_number()) {
-    int v = static_cast<int>(p->get_number());
+  if (auto v = ReadIntField(obj, "startSample")) {
     // Symmetrically with length's loader-side clamp above.
-    m_logic->startSample = std::clamp(v, 0, std::max(0, m_logic->length - 1));
+    m_logic->startSample = std::clamp(*v, 0, std::max(0, m_logic->length - 1));
   }
 }
 

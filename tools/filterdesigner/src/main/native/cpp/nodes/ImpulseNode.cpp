@@ -11,6 +11,7 @@
 #include <ImNodeFlow.h>
 
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/graph/JsonInt.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
 
@@ -39,9 +40,8 @@ void ImpulseNode::DeserializeParams(const wpi::util::json& obj) {
   if (const auto* p = obj.lookup("sampleRate"); p && p->is_number()) {
     m_logic->sampleRate = p->get_number();
   }
-  if (const auto* p = obj.lookup("length"); p && p->is_number()) {
-    int v = static_cast<int>(p->get_number());
-    m_logic->length = std::clamp(v, ImpulseNodeLogic::kMinLength,
+  if (auto v = ReadIntField(obj, "length")) {
+    m_logic->length = std::clamp(*v, ImpulseNodeLogic::kMinLength,
                                  ImpulseNodeLogic::kMaxLength);
   }
 }

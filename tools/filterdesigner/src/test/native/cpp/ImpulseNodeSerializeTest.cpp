@@ -115,4 +115,28 @@ TEST_CASE("ImpulseNodeSerializeTest ToBiquadStageToTimePlotChainRoundTrips",
   CHECK(foundStageToPlot);
 }
 
+TEST_CASE("ImpulseNodeSerializeTest OutOfRangeLengthKeepsDefault",
+          "[filterdesigner]") {
+  // Unlike an in-range but too-large length, which is clamped, a value that
+  // is not an int at all is refused and the default stands.
+  NodeRegistry reg;
+  ImpulseNode::Register(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "Impulse", "pos": [0, 0], "length": 1e100}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  auto* loaded = dynamic_cast<ImpulseNode*>(restored.FindNodeById(1));
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().length == 200);
+}
+
 }  // namespace

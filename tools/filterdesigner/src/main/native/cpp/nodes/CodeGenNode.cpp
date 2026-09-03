@@ -11,6 +11,7 @@
 
 #include "wpi/filterdesigner/codegen/CodeGen.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/graph/JsonInt.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/model/DesignedFilter.hpp"
 #include "wpi/filterdesigner/nodes/BiquadStageNode.hpp"
@@ -49,11 +50,9 @@ void CodeGenNode::SerializeParams(wpi::util::json& obj) const {
 }
 
 void CodeGenNode::DeserializeParams(const wpi::util::json& obj) {
-  if (const auto* p = obj.lookup("lang"); p && p->is_number()) {
-    int v = static_cast<int>(p->get_number());
-    if (v >= 0 && v <= static_cast<int>(Language::Python)) {
-      m_logic->lang = static_cast<Language>(v);
-    }
+  if (auto v = ReadIntField(obj, "lang");
+      v && *v >= 0 && *v <= static_cast<int>(Language::Python)) {
+    m_logic->lang = static_cast<Language>(*v);
   }
   if (const auto* p = obj.lookup("varName"); p && p->is_string()) {
     m_logic->varName = p->get_string();

@@ -131,4 +131,26 @@ TEST_CASE("CodeGenNodeSerializeTest BiquadStageToMultipleSinksRoundTrips",
   CHECK(restored.Nodes().size() == 4u);
 }
 
+TEST_CASE("CodeGenNodeSerializeTest OutOfRangeLangKeepsDefault",
+          "[filterdesigner]") {
+  NodeRegistry reg;
+  CodeGenNode::Register(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "CodeGen", "pos": [0, 0], "lang": 1e100}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  auto* loaded = dynamic_cast<CodeGenNode*>(restored.FindNodeById(1));
+  REQUIRE(loaded != nullptr);
+  CHECK(loaded->Logic().lang == Language::Cpp);
+}
+
 }  // namespace

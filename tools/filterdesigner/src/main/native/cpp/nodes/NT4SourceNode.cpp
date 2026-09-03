@@ -12,6 +12,7 @@
 #include <ImNodeFlow.h>
 
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/graph/JsonInt.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/io/NT4Source.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
@@ -123,23 +124,20 @@ void NT4SourceNode::SerializeParams(wpi::util::json& obj) const {
 }
 
 void NT4SourceNode::DeserializeParams(const wpi::util::json& obj) {
-  if (const auto* p = obj.lookup("serverMode"); p && p->is_number()) {
-    int v = static_cast<int>(p->get_number());
+  if (auto v = ReadIntField(obj, "serverMode")) {
     m_logic->serverMode =
-        v == static_cast<int>(NT4SourceNodeLogic::ServerMode::Team)
+        *v == static_cast<int>(NT4SourceNodeLogic::ServerMode::Team)
             ? NT4SourceNodeLogic::ServerMode::Team
             : NT4SourceNodeLogic::ServerMode::Host;
   }
   if (const auto* p = obj.lookup("host"); p && p->is_string()) {
     m_logic->host = p->get_string();
   }
-  if (const auto* p = obj.lookup("team"); p && p->is_number()) {
-    m_logic->team =
-        NT4SourceNodeLogic::SanitizeTeam(static_cast<int>(p->get_number()));
+  if (auto v = ReadIntField(obj, "team")) {
+    m_logic->team = NT4SourceNodeLogic::SanitizeTeam(*v);
   }
-  if (const auto* p = obj.lookup("port"); p && p->is_number()) {
-    m_logic->port =
-        NT4SourceNodeLogic::SanitizePort(static_cast<int>(p->get_number()));
+  if (auto v = ReadIntField(obj, "port")) {
+    m_logic->port = NT4SourceNodeLogic::SanitizePort(*v);
   }
   if (const auto* p = obj.lookup("topic"); p && p->is_string()) {
     m_logic->SetTopicName(p->get_string());

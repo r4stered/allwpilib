@@ -11,6 +11,7 @@
 #include <ImNodeFlow.h>
 
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/graph/JsonInt.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/filterdesigner/model/DesignedFilter.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
@@ -187,23 +188,19 @@ void BiquadStageNode::DeserializeParams(const wpi::util::json& obj) {
   if (const auto* p = obj.lookup("sampleRateAuto"); p && p->is_bool()) {
     m_logic->sampleRateAutoSync = p->get_bool();
   }
-  if (const auto* p = obj.lookup("kind"); p && p->is_number()) {
-    int v = static_cast<int>(p->get_number());
-    if (v >= 0 && v <= static_cast<int>(StageKind::MovingAverage)) {
-      s.kind = static_cast<StageKind>(v);
-    }
+  if (auto v = ReadIntField(obj, "kind");
+      v && *v >= 0 && *v <= static_cast<int>(StageKind::MovingAverage)) {
+    s.kind = static_cast<StageKind>(*v);
   }
-  if (const auto* p = obj.lookup("family"); p && p->is_number()) {
-    int v = static_cast<int>(p->get_number());
-    if (v >= 0 && v <= static_cast<int>(Family::Elliptic)) {
-      s.family = static_cast<Family>(v);
-    }
+  if (auto v = ReadIntField(obj, "family");
+      v && *v >= 0 && *v <= static_cast<int>(Family::Elliptic)) {
+    s.family = static_cast<Family>(*v);
   }
-  if (const auto* p = obj.lookup("order"); p && p->is_number()) {
-    s.order = static_cast<int>(p->get_number());
+  if (auto v = ReadIntField(obj, "order")) {
+    s.order = *v;
   }
-  if (const auto* p = obj.lookup("taps"); p && p->is_number()) {
-    s.taps = static_cast<int>(p->get_number());
+  if (auto v = ReadIntField(obj, "taps")) {
+    s.taps = *v;
   }
   if (const auto* p = obj.lookup("f1"); p && p->is_number()) {
     s.f1 = p->get_number();

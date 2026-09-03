@@ -19,6 +19,7 @@
 
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/graph/JsonInt.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
 #include "wpi/util/json.hpp"
 
@@ -33,19 +34,15 @@ constexpr const char* kRejectV1Message =
     "supports. Rebuild the design as a node graph and re-save.";
 
 // Ids and the version live in an int, and a loaded id is bumped by one to
-// mint the next fresh one, so the cast can't be blind: a double past int's
-// range is undefined to convert, a long wraps, and INT_MAX + 1 overflows.
-// Only a plain integer in [0, INT_MAX) qualifies; the parser types anything
-// with a fraction or exponent as a double, which is rejected too.
+// mint the next fresh one, so on top of ReadJsonInt's range check a graph
+// int must be non-negative and leave room for that increment: only
+// [0, INT_MAX) qualifies.
 std::optional<int> ReadGraphInt(const json& value) {
-  if (!value.is_int()) {
+  const std::optional<int> v = ReadJsonInt(value);
+  if (!v || *v < 0 || *v >= std::numeric_limits<int>::max()) {
     return std::nullopt;
   }
-  const auto v = value.get_int();
-  if (v < 0 || v >= std::numeric_limits<int>::max()) {
-    return std::nullopt;
-  }
-  return static_cast<int>(v);
+  return v;
 }
 
 // ImFlow::BaseNode's own inPin/outPin assert and UB-deref on a miss, which
