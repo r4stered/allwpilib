@@ -16,6 +16,7 @@
 #include "wpi/filterdesigner/model/Signal.hpp"
 
 #ifndef RUNNING_FILTERDESIGNER_TESTS
+#include <algorithm>
 #include <cmath>
 
 #include <imgui.h>
@@ -293,6 +294,7 @@ void BiquadStageNode::draw() {
     case StageKind::HighPass: {
       ImGui::SetNextItemWidth(kItemWidth);
       ImGui::InputInt("Order", &s.order);
+      s.order = std::clamp(s.order, 1, kMaxOrder);
       ImGui::SetNextItemWidth(kItemWidth);
       ImGui::InputDouble("Cutoff (Hz)", &s.f1, 0.0, 0.0, "%.3f");
       break;
@@ -301,6 +303,7 @@ void BiquadStageNode::draw() {
     case StageKind::BandStop: {
       ImGui::SetNextItemWidth(kItemWidth);
       ImGui::InputInt("Order", &s.order);
+      s.order = std::clamp(s.order, 1, kMaxOrder);
       ImGui::SetNextItemWidth(kItemWidth);
       ImGui::InputDouble("Low edge (Hz)", &s.f1, 0.0, 0.0, "%.3f");
       ImGui::SetNextItemWidth(kItemWidth);
@@ -316,6 +319,7 @@ void BiquadStageNode::draw() {
     case StageKind::MovingAverage:
       ImGui::SetNextItemWidth(kItemWidth);
       ImGui::InputInt("Taps", &s.taps);
+      s.taps = std::clamp(s.taps, 1, kMaxTaps);
       break;
   }
 

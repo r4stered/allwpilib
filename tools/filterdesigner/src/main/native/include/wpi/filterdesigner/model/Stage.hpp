@@ -33,6 +33,17 @@ enum class StageKind {
  */
 enum class Family { Butterworth, Chebyshev1, Chebyshev2, Elliptic };
 
+/**
+ * Ceilings on the two integer stage parameters. Both designers accept any
+ * value above zero and do work in proportion to it — an accidental extra
+ * digit or three stalls the UI thread, and a large enough one throws
+ * bad_alloc past the invalid_argument handler. The ceilings sit well past
+ * anything a robot filter needs: a 32nd-order cascade, or a 1024-tap
+ * average that spans a full second at 1 kHz.
+ */
+inline constexpr int kMaxOrder = 32;
+inline constexpr int kMaxTaps = 1024;
+
 /** Per-stage design parameters. Sample rate is shared across all stages. */
 struct Stage {
   StageKind kind = StageKind::LowPass;

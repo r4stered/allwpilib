@@ -221,6 +221,32 @@ TEST_CASE("BiquadStageNodeLogicTest FilteredAcceptsInputWithUnknownRate",
   CHECK(logic.FilterError().empty());
 }
 
+TEST_CASE("BiquadStageNodeLogicTest OrderPastCeilingIsRejectedNotDesigned",
+          "[filterdesigner]") {
+  // A loaded file bypasses the UI clamp; the designer must never see it.
+  BiquadStageNodeLogic logic;
+  logic.stage.order = wpi::filterdesigner::kMaxOrder + 1;
+  CHECK(logic.Filter() == nullptr);
+  CHECK_FALSE(logic.DesignError().empty());
+
+  logic.stage.order = wpi::filterdesigner::kMaxOrder;
+  UNSCOPED_INFO(logic.DesignError());
+  CHECK(logic.Filter() != nullptr);
+}
+
+TEST_CASE("BiquadStageNodeLogicTest TapsPastCeilingIsRejectedNotDesigned",
+          "[filterdesigner]") {
+  BiquadStageNodeLogic logic;
+  logic.stage.kind = StageKind::MovingAverage;
+  logic.stage.taps = wpi::filterdesigner::kMaxTaps + 1;
+  CHECK(logic.Filter() == nullptr);
+  CHECK_FALSE(logic.DesignError().empty());
+
+  logic.stage.taps = wpi::filterdesigner::kMaxTaps;
+  UNSCOPED_INFO(logic.DesignError());
+  CHECK(logic.Filter() != nullptr);
+}
+
 TEST_CASE("BiquadStageNodeLogicTest NotchKindDesignsWithoutFamily",
           "[filterdesigner]") {
   BiquadStageNodeLogic logic;

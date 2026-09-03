@@ -68,6 +68,16 @@ std::pair<Sections, std::string> DesignStage(const Stage& s, double fs) {
   if (fs <= 0.0) {
     return {{}, "Sample rate must be positive"};
   }
+  // The UI clamps these as they're typed; this catches a loaded file.
+  if (s.kind == StageKind::MovingAverage) {
+    if (s.taps < 1 || s.taps > kMaxTaps) {
+      return {{}, std::format("Taps must be between 1 and {}", kMaxTaps)};
+    }
+  } else if (KindUsesFamily(s.kind)) {
+    if (s.order < 1 || s.order > kMaxOrder) {
+      return {{}, std::format("Order must be between 1 and {}", kMaxOrder)};
+    }
+  }
   try {
     switch (s.kind) {
       case StageKind::LowPass:
