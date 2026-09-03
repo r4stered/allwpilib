@@ -4,6 +4,8 @@
 
 #include "wpi/filterdesigner/nodes/StepNodeLogic.hpp"
 
+#include <limits>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include "TestAssertions.hpp"
@@ -86,6 +88,19 @@ TEST_CASE("StepNodeLogicTest InvalidParamsReturnNull", "[filterdesigner]") {
   logic.sampleRate = 1000.0;
   logic.length = 1;
   CHECK(logic.Signal() == nullptr);
+}
+
+TEST_CASE("StepNodeLogicTest NonFiniteSampleRateReturnsNull",
+          "[filterdesigner]") {
+  // "1e999" in the sample-rate field parses to infinity, which a plain
+  // sampleRate <= 0 test lets through.
+  StepNodeLogic logic;
+  logic.sampleRate = std::numeric_limits<double>::infinity();
+  CHECK(logic.Signal() == nullptr);
+  logic.sampleRate = std::numeric_limits<double>::quiet_NaN();
+  CHECK(logic.Signal() == nullptr);
+  logic.sampleRate = 1000.0;
+  CHECK(logic.Signal() != nullptr);
 }
 
 }  // namespace

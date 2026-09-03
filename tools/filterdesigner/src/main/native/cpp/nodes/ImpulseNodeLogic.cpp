@@ -5,13 +5,16 @@
 #include "wpi/filterdesigner/nodes/ImpulseNodeLogic.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <utility>
 
 namespace wpi::filterdesigner {
 
 const wpi::filterdesigner::Signal* ImpulseNodeLogic::Signal() const {
-  if (sampleRate <= 0.0 || length < kMinLength) {
+  // Infinity slips past a plain sign test and collapses every timestamp
+  // to zero; NaN passes it outright.
+  if (!std::isfinite(sampleRate) || sampleRate <= 0.0 || length < kMinLength) {
     m_signal.reset();
     m_lastSampleRate = 0.0;
     m_lastLength = 0;
