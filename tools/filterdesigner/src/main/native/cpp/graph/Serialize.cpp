@@ -6,7 +6,9 @@
 
 #include <fstream>
 #include <ios>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -29,6 +31,22 @@ using wpi::util::json;
 constexpr const char* kRejectV1Message =
     "This .fdsgn file uses an older format (v1) that this tool no longer "
     "supports. Rebuild the design as a node graph and re-save.";
+
+// Ids and the version live in an int, and a loaded id is bumped by one to
+// mint the next fresh one, so the cast can't be blind: a double past int's
+// range is undefined to convert, a long wraps, and INT_MAX + 1 overflows.
+// Only a plain integer in [0, INT_MAX) qualifies; the parser types anything
+// with a fraction or exponent as a double, which is rejected too.
+std::optional<int> ReadGraphInt(const json& value) {
+  if (!value.is_int()) {
+    return std::nullopt;
+  }
+  const auto v = value.get_int();
+  if (v < 0 || v >= std::numeric_limits<int>::max()) {
+    return std::nullopt;
+  }
+  return static_cast<int>(v);
+}
 
 // ImFlow::BaseNode's own inPin/outPin assert and UB-deref on a miss, which
 // the load path cannot afford: its pin names come from arbitrary JSON.
@@ -97,7 +115,13 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     result.error = kRejectV1Message;
     return result;
   }
-  int version = static_cast<int>(versionNode->get_number());
+  const std::optional<int> parsedVersion = ReadGraphInt(*versionNode);
+  if (!parsedVersion) {
+    result.error =
+        "Unsupported .fdsgn version (not a whole number this build can read)";
+    return result;
+  }
+  const int version = *parsedVersion;
   if (version == 1) {
     result.error = kRejectV1Message;
     return result;
@@ -133,14 +157,19 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     const json* idNode = entry.lookup("id");
     const json* typeNode = entry.lookup("type");
     const json* posNode = entry.lookup("pos");
-    if (!idNode || !idNode->is_number() || !typeNode ||
-        !typeNode->is_string() || !posNode || !posNode->is_array() ||
-        posNode->get_array().size() != 2) {
+    if (!idNode || !typeNode || !typeNode->is_string() || !posNode ||
+        !posNode->is_array() || posNode->get_array().size() != 2) {
       result.warnings.emplace_back(
           "Skipping node with missing id/type/pos fields");
       continue;
     }
-    int id = static_cast<int>(idNode->get_number());
+    const std::optional<int> parsedId = ReadGraphInt(*idNode);
+    if (!parsedId) {
+      result.warnings.emplace_back(
+          "Skipping node whose id is not a whole number in range");
+      continue;
+    }
+    const int id = *parsedId;
     const std::string& type = typeNode->get_string();
     const auto& pos = posNode->get_array();
     if (!pos[0].is_number() || !pos[1].is_number()) {
@@ -191,15 +220,20 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     const json* srcPin = srcNode->lookup("pin");
     const json* dstId = dstNode->lookup("node");
     const json* dstPin = dstNode->lookup("pin");
-    if (!srcId || !srcId->is_number() || !srcPin || !srcPin->is_string() ||
-        !dstId || !dstId->is_number() || !dstPin || !dstPin->is_string()) {
+    if (!srcId || !srcPin || !srcPin->is_string() || !dstId || !dstPin ||
+        !dstPin->is_string()) {
       result.warnings.emplace_back("Skipping link with malformed endpoints");
       continue;
     }
-    FilterDesignerNode* src =
-        graph.FindNodeById(static_cast<int>(srcId->get_number()));
-    FilterDesignerNode* dst =
-        graph.FindNodeById(static_cast<int>(dstId->get_number()));
+    const std::optional<int> srcGraphId = ReadGraphInt(*srcId);
+    const std::optional<int> dstGraphId = ReadGraphInt(*dstId);
+    if (!srcGraphId || !dstGraphId) {
+      result.warnings.emplace_back(
+          "Skipping link whose endpoint id is not a whole number in range");
+      continue;
+    }
+    FilterDesignerNode* src = graph.FindNodeById(*srcGraphId);
+    FilterDesignerNode* dst = graph.FindNodeById(*dstGraphId);
     if (!src || !dst) {
       // Endpoint was skipped earlier, and already warned about.
       continue;
@@ -215,9 +249,9 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     // with no wire and the next save would drop it for good.
     if (auto existing = inPin->getLink().lock();
         existing && existing->left() == outPin) {
-      result.warnings.emplace_back(
-          "Duplicate link into pin '" + dstPin->get_string() + "' of node " +
-          std::to_string(static_cast<int>(dstId->get_number())) + " — skipped");
+      result.warnings.emplace_back("Duplicate link into pin '" +
+                                   dstPin->get_string() + "' of node " +
+                                   std::to_string(*dstGraphId) + " — skipped");
       continue;
     }
     inPin->createLink(outPin);

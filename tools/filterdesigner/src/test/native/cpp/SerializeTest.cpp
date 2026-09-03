@@ -362,4 +362,56 @@ TEST_CASE("SerializeTest NewNodesAfterLoadDontCollideWithLoadedIds",
   CHECK(fresh->GraphId() > 12);
 }
 
+TEST_CASE("SerializeTest NodeIdOutsideIntRangeSkippedWithWarning",
+          "[filterdesigner]") {
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  // Each bad id would either be undefined to cast (the doubles), wrap (the
+  // long), or overflow the next-id bump (INT_MAX). Only node 3 may load,
+  // and a link naming a bad id is dropped rather than cast.
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1e100, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 2.5, "type": "FakeSource", "pos": [0, 0]},
+      {"id": -1, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 99999999999, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 2147483647, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 3, "type": "FakeSink", "pos": [100, 0]}
+    ],
+    "links": [
+      {"src": {"node": 1e100, "pin": "out"}, "dst": {"node": 3, "pin": "in"}}
+    ]
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(result.warnings.size() == 6u);
+  for (int i = 0; i < 5; ++i) {
+    UNSCOPED_INFO("warning " << i << ": " << result.warnings[i]);
+    CHECK(result.warnings[i].find("whole number") != std::string::npos);
+  }
+  CHECK(result.warnings[5].find("endpoint id") != std::string::npos);
+
+  REQUIRE(graph.Nodes().size() == 1u);
+  CHECK(graph.FindNodeById(3) != nullptr);
+  CHECK(graph.Links().empty());
+  // The bad ids never reached the id counter.
+  auto fresh = graph.AddNode<FakeSourceNode>(ImVec2{200.0f, 0.0f});
+  CHECK(fresh->GraphId() == 4);
+}
+
+TEST_CASE("SerializeTest NonIntegralVersionIsRejected", "[filterdesigner]") {
+  NodeRegistry reg;
+  RegisterFakes(reg);
+  Graph graph;
+  auto result = DeserializeGraph(
+      R"({"version": 1e100, "nodes": [], "links": []})", graph, reg);
+  CHECK_FALSE(result.ok());
+  CHECK(result.error.find("Unsupported") != std::string::npos);
+}
+
 }  // namespace
