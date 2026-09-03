@@ -127,7 +127,10 @@ void FrequencyPlotNode::draw() {
   }
 
   ImVec2 plotSize{m_logic->plotWidth, m_logic->plotHeight};
-  if (ImPlot::BeginPlot("##freqplot", plotSize)) {
+  // ImPlot shows a legend by default; SetupLegend only positions it.
+  ImPlotFlags plotFlags =
+      m_logic->showLegend ? ImPlotFlags_None : ImPlotFlags_NoLegend;
+  if (ImPlot::BeginPlot("##freqplot", plotSize, plotFlags)) {
     ImPlotAxisFlags xFlags = ImPlotAxisFlags_None;
     ImPlotAxisFlags yFlags =
         m_logic->autoscale ? ImPlotAxisFlags_AutoFit : ImPlotAxisFlags_None;

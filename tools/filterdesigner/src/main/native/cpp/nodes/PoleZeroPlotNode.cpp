@@ -158,7 +158,12 @@ void PoleZeroPlotNode::draw() {
   }
 
   ImVec2 plotSize{m_logic->plotWidth, m_logic->plotHeight};
-  if (ImPlot::BeginPlot("##polezero", plotSize, ImPlotFlags_Equal)) {
+  // ImPlot shows a legend by default; SetupLegend only positions it.
+  ImPlotFlags plotFlags = ImPlotFlags_Equal;
+  if (!m_logic->showLegend) {
+    plotFlags |= ImPlotFlags_NoLegend;
+  }
+  if (ImPlot::BeginPlot("##polezero", plotSize, plotFlags)) {
     ImPlot::SetupAxis(ImAxis_X1, "Re");
     ImPlot::SetupAxis(ImAxis_Y1, "Im");
     ImPlot::SetupAxisLimits(ImAxis_X1, -1.5, 1.5, ImPlotCond_Once);

@@ -155,7 +155,10 @@ void BodePlotNode::draw() {
     ImPlotAxisFlags magFlags =
         m_logic->autoscale ? ImPlotAxisFlags_AutoFit : ImPlotAxisFlags_None;
     ImPlotAxisFlags phaseFlags = magFlags;
-    if (ImPlot::BeginPlot("##magnitude")) {
+    // ImPlot shows a legend by default; SetupLegend only positions it.
+    ImPlotFlags plotFlags =
+        m_logic->showLegend ? ImPlotFlags_None : ImPlotFlags_NoLegend;
+    if (ImPlot::BeginPlot("##magnitude", ImVec2(-1, 0), plotFlags)) {
       ImPlot::SetupAxis(ImAxis_X1, "Frequency (Hz)", ImPlotAxisFlags_NoLabel);
       ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
       ImPlot::SetupAxis(ImAxis_Y1, "Magnitude (dB)", magFlags);
@@ -177,7 +180,7 @@ void BodePlotNode::draw() {
       }
       ImPlot::EndPlot();
     }
-    if (ImPlot::BeginPlot("##phase")) {
+    if (ImPlot::BeginPlot("##phase", ImVec2(-1, 0), plotFlags)) {
       ImPlot::SetupAxis(ImAxis_X1, "Frequency (Hz)");
       ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
       ImPlot::SetupAxis(ImAxis_Y1, "Phase (deg)", phaseFlags);

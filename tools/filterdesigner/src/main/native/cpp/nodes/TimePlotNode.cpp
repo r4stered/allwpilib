@@ -121,7 +121,10 @@ void TimePlotNode::draw() {
   }
 
   ImVec2 plotSize{m_logic->plotWidth, m_logic->plotHeight};
-  if (ImPlot::BeginPlot("##timeplot", plotSize)) {
+  // ImPlot shows a legend by default; SetupLegend only positions it.
+  ImPlotFlags plotFlags =
+      m_logic->showLegend ? ImPlotFlags_None : ImPlotFlags_NoLegend;
+  if (ImPlot::BeginPlot("##timeplot", plotSize, plotFlags)) {
     // A live source's timestamps drift upward forever, so AutoFit pins the
     // view to the buffered span. Static sources stay manual, keeping pan and
     // zoom.
