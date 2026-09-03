@@ -111,6 +111,13 @@ void Signal::ResampleToGrid() {
   // the checks below reject it.
   const double slotCount =
       std::round((timestamps[last] - origin) / period) + 1.0;
+  // Timestamps that run backwards give a negative span, which a positive
+  // median period does not rule out. Refuse rather than cast it to a size:
+  // that saturates to an empty grid on arm64 and to a gigantic one elsewhere.
+  // Written to also catch NaN.
+  if (!(slotCount >= 1.0)) {
+    return;
+  }
   quality.filled = std::max(0.0, 1.0 - static_cast<double>(kept) / slotCount);
   if (slotCount > static_cast<double>(kMaxGridSlots) ||
       slotCount >

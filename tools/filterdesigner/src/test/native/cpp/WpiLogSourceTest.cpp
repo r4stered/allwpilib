@@ -115,6 +115,31 @@ TEST_CASE_METHOD(WpiLogSourceTest,
 }
 
 TEST_CASE_METHOD(WpiLogSourceTest,
+                 "WpiLogSourceTest LoadEntryOrdersRecordsByTimestamp",
+                 "[filterdesigner]") {
+  // A writer may append with timestamps that run backwards; the file keeps
+  // append order, and everything downstream assumes time order.
+  wpi::log::DoubleLogEntry d{log, "accel", 0};
+  d.Append(0.75, 2'000'000);
+  d.Append(0.5, 1'000'000);
+  d.Append(1.125, 3'000'000);
+  log.Flush();
+
+  auto src = WpiLogSource::FromBuffer(data);
+  REQUIRE(src.has_value());
+  auto sig = src->LoadEntryRaw("accel");
+  REQUIRE(sig.has_value());
+  REQUIRE(sig->values.size() == 3u);
+  CHECK_NEAR(sig->timestamps[0], 0.001, 1e-12);
+  CHECK_NEAR(sig->timestamps[1], 0.002, 1e-12);
+  CHECK_NEAR(sig->timestamps[2], 0.003, 1e-12);
+  UNSCOPED_INFO("values must follow their timestamps");
+  CHECK_DOUBLE_EQ(sig->values[0], 0.5);
+  CHECK_DOUBLE_EQ(sig->values[1], 0.75);
+  CHECK_DOUBLE_EQ(sig->values[2], 1.125);
+}
+
+TEST_CASE_METHOD(WpiLogSourceTest,
                  "WpiLogSourceTest LoadEntryRawLeavesTheSamplesAsLogged",
                  "[filterdesigner]") {
   // Jittered timestamps around 100 Hz with one dropped sample. LoadEntry

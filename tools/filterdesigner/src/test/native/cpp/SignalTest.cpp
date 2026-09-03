@@ -418,6 +418,21 @@ TEST_CASE("SignalTest ResampleToGridRefusesOversizedGrid", "[filterdesigner]") {
   CHECK(s.quality.filled > 0.99);
 }
 
+TEST_CASE("SignalTest ResampleToGridRefusesTimestampsThatRunBackwards",
+          "[filterdesigner]") {
+  // A record whose last timestamp precedes its first still has a positive
+  // median period, so the rate is inferred; the grid it implies has a
+  // negative slot count, and must be refused rather than allocated.
+  Signal s = Ramp({0.0, 0.001, 0.002, 0.003, -0.5});
+  s.ResampleToGrid();
+
+  CHECK_NEAR(s.sampleRate, 1000.0, 1e-9);
+  CHECK_FALSE(s.quality.onGrid);
+  CHECK(s.timestamps.size() == 5u);
+  CHECK(s.values.size() == 5u);
+  CHECK_DOUBLE_EQ(s.timestamps.back(), -0.5);
+}
+
 TEST_CASE("SignalTest ResampleToGridNoOpBelowTwoSamples", "[filterdesigner]") {
   Signal empty;
   empty.ResampleToGrid();

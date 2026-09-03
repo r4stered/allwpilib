@@ -58,7 +58,8 @@ class WpiLogSource {
 
   /**
    * Loads an entry's samples exactly as logged — jittered timestamps, holes
-   * and all. This is the form a time-range selection has to window, since
+   * and all — in time order, whatever order the file holds them in. This is
+   * the form a time-range selection has to window, since
    * @ref Signal::ResampleToGrid measures whatever it is handed. Separate from
    * a re-load because a scan costs O(records) whichever entry it is after.
    */

@@ -169,8 +169,9 @@ struct Signal {
    * when @ref discrete is set. Sets @ref sampleRate and @ref quality; leaves
    * @ref revision and @ref discrete alone.
    *
-   * Leaves the data untouched when no grid can be inferred and when the grid
-   * would exceed @ref kMaxGridSlots or @ref kMaxGridExpansion;
+   * Leaves the data untouched when no grid can be inferred, when the
+   * timestamps run backwards, and when the grid would exceed
+   * @ref kMaxGridSlots or @ref kMaxGridExpansion;
    * @ref GridQuality::onGrid distinguishes those cases and the rest of
    * @ref quality is populated either way.
    *

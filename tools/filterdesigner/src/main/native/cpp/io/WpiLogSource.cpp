@@ -5,12 +5,15 @@
 #include "wpi/filterdesigner/io/WpiLogSource.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "wpi/datalog/DataLogReader.hpp"
 #include "wpi/util/MemoryBuffer.hpp"
@@ -116,6 +119,27 @@ std::optional<Signal> WpiLogSource::LoadEntryRaw(std::string_view name) const {
     }
     sig.timestamps.push_back(record.GetTimestamp() * 1e-9);
     sig.values.push_back(value);
+  }
+  // Records come back in file order, and a writer is free to hand the log
+  // timestamps that run backwards. Everything downstream — the resampler,
+  // the segment finder, the window's binary search — assumes time order, so
+  // restore it here. Stable, so samples sharing a timestamp keep their
+  // logged order.
+  if (!std::ranges::is_sorted(sig.timestamps)) {
+    std::vector<std::size_t> order(sig.timestamps.size());
+    std::iota(order.begin(), order.end(), std::size_t{0});
+    std::ranges::stable_sort(order, {},
+                             [&](std::size_t i) { return sig.timestamps[i]; });
+    std::vector<double> timestamps;
+    std::vector<double> values;
+    timestamps.reserve(order.size());
+    values.reserve(order.size());
+    for (std::size_t i : order) {
+      timestamps.push_back(sig.timestamps[i]);
+      values.push_back(sig.values[i]);
+    }
+    sig.timestamps = std::move(timestamps);
+    sig.values = std::move(values);
   }
   // Integers stay continuous: an int64 entry is more often a count than a
   // state enum.
