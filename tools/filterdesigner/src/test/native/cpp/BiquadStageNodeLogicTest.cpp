@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <string>
 #include <vector>
@@ -286,6 +287,60 @@ TEST_CASE("BiquadStageNodeLogicTest MovingAverageDesignsFromTapsAlone",
   UNSCOPED_INFO(logic.DesignError());
   REQUIRE(design != nullptr);
   CHECK_FALSE(design->sections.empty());
+}
+
+TEST_CASE("BiquadStageNodeLogicTest NonFiniteParametersAreRejected",
+          "[filterdesigner]") {
+  constexpr double kInf = std::numeric_limits<double>::infinity();
+  constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+
+  SECTION("infinite sample rate") {
+    BiquadStageNodeLogic logic;
+    logic.sampleRate = kInf;
+    CHECK(logic.Filter() == nullptr);
+    CHECK(logic.DesignError().find("finite") != std::string::npos);
+  }
+  SECTION("infinite cutoff") {
+    BiquadStageNodeLogic logic;
+    logic.stage.f1 = kInf;
+    CHECK(logic.Filter() == nullptr);
+    CHECK(logic.DesignError().find("finite") != std::string::npos);
+  }
+  SECTION("NaN cutoff") {
+    BiquadStageNodeLogic logic;
+    logic.stage.f1 = kNaN;
+    CHECK(logic.Filter() == nullptr);
+    CHECK(logic.DesignError().find("finite") != std::string::npos);
+  }
+  SECTION("infinite Q on a notch") {
+    BiquadStageNodeLogic logic;
+    logic.stage.kind = StageKind::Notch;
+    logic.stage.q = kInf;
+    CHECK(logic.Filter() == nullptr);
+    CHECK(logic.DesignError().find("finite") != std::string::npos);
+  }
+  SECTION("infinite ripple on a Chebyshev I") {
+    BiquadStageNodeLogic logic;
+    logic.stage.family = Family::Chebyshev1;
+    logic.stage.passbandRippleDb = kInf;
+    CHECK(logic.Filter() == nullptr);
+    CHECK(logic.DesignError().find("finite") != std::string::npos);
+  }
+}
+
+TEST_CASE("BiquadStageNodeLogicTest NonFiniteUnusedParameterStillDesigns",
+          "[filterdesigner]") {
+  // A low-pass never reads f2, Q or the ripple figures; a stray infinity
+  // there (typed into a band edge before switching kind) must not block a
+  // design the UI offers no field to repair.
+  constexpr double kInf = std::numeric_limits<double>::infinity();
+  BiquadStageNodeLogic logic;
+  logic.stage.f2 = kInf;
+  logic.stage.q = kInf;
+  logic.stage.passbandRippleDb = kInf;
+  logic.stage.stopbandAttenDb = kInf;
+  UNSCOPED_INFO(logic.DesignError());
+  CHECK(logic.Filter() != nullptr);
 }
 
 }  // namespace

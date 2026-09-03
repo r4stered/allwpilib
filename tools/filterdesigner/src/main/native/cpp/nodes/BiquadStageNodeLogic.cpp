@@ -59,12 +59,51 @@ Sections DesignClassicalKind(wpi::math::BiquadFilter::Kind k, const Stage& s,
   return {};
 }
 
+// True when the parameters this stage kind and family actually read are all
+// finite. ImGui's number parser turns an overflowing entry such as 1e999 into
+// infinity, and a hand-edited file can carry the same; infinity passes every
+// ordered check here and in wpi::math::BiquadFilter and reaches the
+// coefficient arithmetic. Fields the kind doesn't read are left alone, since
+// the UI gives no way to fix one it isn't showing.
+bool UsedParametersAreFinite(const Stage& s, double fs) {
+  if (!std::isfinite(fs)) {
+    return false;
+  }
+  switch (s.kind) {
+    case StageKind::MovingAverage:
+      return true;
+    case StageKind::Notch:
+      return std::isfinite(s.f1) && std::isfinite(s.q);
+    case StageKind::BandPass:
+    case StageKind::BandStop:
+      if (!std::isfinite(s.f2)) {
+        return false;
+      }
+      [[fallthrough]];
+    case StageKind::LowPass:
+    case StageKind::HighPass:
+      break;
+  }
+  if (!std::isfinite(s.f1)) {
+    return false;
+  }
+  const bool usesRipple =
+      s.family == Family::Chebyshev1 || s.family == Family::Elliptic;
+  const bool usesAtten =
+      s.family == Family::Chebyshev2 || s.family == Family::Elliptic;
+  return (!usesRipple || std::isfinite(s.passbandRippleDb)) &&
+         (!usesAtten || std::isfinite(s.stopbandAttenDb));
+}
+
 // Returns the designed Sections or a populated error message; one or the
 // other is set on return. Swallows wpi::math::BiquadFilter's
 // std::invalid_argument so the node can render an error banner instead of
 // crashing the app on out-of-range inputs.
 std::pair<Sections, std::string> DesignStage(const Stage& s, double fs) {
   using K = wpi::math::BiquadFilter::Kind;
+  if (!UsedParametersAreFinite(s, fs)) {
+    return {{}, "Parameters must be finite"};
+  }
   if (fs <= 0.0) {
     return {{}, "Sample rate must be positive"};
   }
