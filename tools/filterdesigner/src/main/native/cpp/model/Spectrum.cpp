@@ -16,21 +16,29 @@
 namespace wpi::filterdesigner {
 
 std::optional<Spectrum> Spectrum::Compute(std::span<const double> samples,
-                                          double sampleRate) {
+                                          double sampleRate,
+                                          SpectrumMode mode) {
   const size_t N = samples.size();
   if (N < 2 || sampleRate <= 0.0) {
     return std::nullopt;
   }
+  const bool stationary = mode == SpectrumMode::kStationary;
 
-  // Periodic Hann (denominator N, not N-1) — matches scipy.signal.periodogram /
-  // welch so golden values from SciPy line up.
   std::vector<double> windowed(N);
   double windowSum = 0.0;
-  const double twoPiOverN = 2.0 * std::numbers::pi / static_cast<double>(N);
-  for (size_t n = 0; n < N; ++n) {
-    double w = 0.5 * (1.0 - std::cos(twoPiOverN * static_cast<double>(n)));
-    windowed[n] = samples[n] * w;
-    windowSum += w;
+  if (stationary) {
+    // Periodic Hann (denominator N, not N-1) — matches
+    // scipy.signal.periodogram / welch so golden values from SciPy line up.
+    const double twoPiOverN = 2.0 * std::numbers::pi / static_cast<double>(N);
+    for (size_t n = 0; n < N; ++n) {
+      double w = 0.5 * (1.0 - std::cos(twoPiOverN * static_cast<double>(n)));
+      windowed[n] = samples[n] * w;
+      windowSum += w;
+    }
+  } else {
+    // A transient is transformed as is: its energy sits in the first few
+    // samples, exactly where a taper is near zero. See SpectrumMode.
+    std::copy(samples.begin(), samples.end(), windowed.begin());
   }
 
   const size_t nBins = N / 2 + 1;
@@ -50,12 +58,16 @@ std::optional<Spectrum> Spectrum::Compute(std::span<const double> samples,
   for (size_t k = 0; k < nBins; ++k) {
     spec.frequencies[k] =
         static_cast<double>(k) * sampleRate / static_cast<double>(N);
-    double linear = std::abs(out[k]) * invWindowSum;
-    // Double non-DC, non-Nyquist bins to account for folding to a single-sided
-    // spectrum.
-    const bool isNyquist = (N % 2 == 0) && (k == nBins - 1);
-    if (k != 0 && !isNyquist) {
-      linear *= 2.0;
+    double linear = std::abs(out[k]);
+    if (stationary) {
+      // Amplitude scaling: undo the window's gain, then double the non-DC,
+      // non-Nyquist bins to fold the two-sided spectrum onto one side. A
+      // transient keeps the raw DFT magnitude, so a unit impulse reads 0 dB.
+      linear *= invWindowSum;
+      const bool isNyquist = (N % 2 == 0) && (k == nBins - 1);
+      if (k != 0 && !isNyquist) {
+        linear *= 2.0;
+      }
     }
     spec.magnitudesDb[k] = 20.0 * std::log10(std::max(linear, kEps));
   }

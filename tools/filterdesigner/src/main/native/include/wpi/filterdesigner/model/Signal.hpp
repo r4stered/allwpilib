@@ -129,6 +129,14 @@ struct Signal {
    * to the initial range; filter nodes propagate it from their input.
    */
   bool live = false;
+  /**
+   * True for a generated test signal (impulse, step) whose energy is a
+   * one-off event rather than an ongoing process; filter nodes propagate it
+   * from their input. The Frequency Plot transforms a transient without a
+   * window (see @ref SpectrumMode), so a filtered impulse shows the filter's
+   * frequency response rather than the window's.
+   */
+  bool transient = false;
 
   /** Ceiling on the grid @ref ResampleToGrid will build, in slots: 64 MiB. */
   static constexpr std::size_t kMaxGridSlots = std::size_t{1} << 22;
@@ -191,7 +199,8 @@ struct Signal {
    * implies, leaving this signal alone. Call it on raw loader samples, for the
    * reason @ref ResampleToGrid gives.
    *
-   * @ref name, @ref discrete and @ref live carry over; @ref revision does not,
+   * @ref name, @ref discrete, @ref live and @ref transient carry over;
+   * @ref revision does not,
    * since only the owner of a signal knows what its revisions mean.
    */
   Signal Window(TimeRange range) const;

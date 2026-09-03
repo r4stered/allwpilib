@@ -637,12 +637,14 @@ TEST_CASE("SignalTest WindowCarriesTheSourceMetadataButNotItsRevision",
   raw.name = "/gate";
   raw.discrete = true;
   raw.live = true;
+  raw.transient = true;
   raw.revision = 42;
 
   Signal w = raw.Window(TimeRange{0.0, 0.03});
   CHECK(w.name == "/gate");
   CHECK(w.discrete);
   CHECK(w.live);
+  CHECK(w.transient);
   UNSCOPED_INFO("only the owner of a signal knows what its revisions mean");
   CHECK(w.revision == 0u);
 }

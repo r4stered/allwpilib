@@ -178,6 +178,7 @@ Signal Signal::Window(TimeRange range) const {
   out.name = name;
   out.discrete = discrete;
   out.live = live;
+  out.transient = transient;
   const std::size_t count = std::min(timestamps.size(), values.size());
   if (count == 0 || range.Empty()) {
     return out;

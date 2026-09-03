@@ -39,8 +39,11 @@ struct FrequencyPlotNodeLogic {
 
   /**
    * Spectrum of @p sig for input pin @p slot, or nullptr when @p sig is null
-   * or too short or rateless to transform. Recomputed only when the pointer,
-   * revision or sample rate differ from the previous call for that slot; a
+   * or too short or rateless to transform. A transient (see
+   * @ref Signal::transient) is transformed without a window, so a filtered
+   * impulse plots the filter's response. Recomputed only when the pointer,
+   * revision, sample rate or transient flag differ from the previous call
+   * for that slot; a
    * live source bumps its revision every frame it drains samples, a log
    * source only when its window changes. The pointer is valid until the next
    * call for the same slot.
@@ -55,6 +58,7 @@ struct FrequencyPlotNodeLogic {
     const Signal* input = nullptr;
     std::uint64_t revision = 0;
     double sampleRate = 0.0;
+    bool transient = false;
     std::optional<Spectrum> spectrum;
   };
   std::array<CachedSpectrum, kInputCount> m_cache;

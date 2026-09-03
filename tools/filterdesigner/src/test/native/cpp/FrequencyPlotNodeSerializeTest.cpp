@@ -99,8 +99,9 @@ TEST_CASE("FrequencyPlotNodeSerializeTest ConsumesUpstreamSignalSpectrum",
 
   const auto* sig = impulse->Logic().Signal();
   REQUIRE(sig != nullptr);
-  auto spec =
-      wpi::filterdesigner::Spectrum::Compute(sig->values, sig->sampleRate);
+  auto spec = wpi::filterdesigner::Spectrum::Compute(
+      sig->values, sig->sampleRate,
+      wpi::filterdesigner::SpectrumMode::kTransient);
   REQUIRE(spec.has_value());
   CHECK_FALSE(spec->frequencies.empty());
   CHECK(spec->frequencies.size() == spec->magnitudesDb.size());

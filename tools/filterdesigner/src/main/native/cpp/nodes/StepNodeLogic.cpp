@@ -29,6 +29,7 @@ const wpi::filterdesigner::Signal* StepNodeLogic::Signal() const {
   s.name = "step";
   s.sampleRate = sampleRate;
   s.quality = GridQuality::Exact(sampleRate);
+  s.transient = true;
   s.timestamps.resize(static_cast<std::size_t>(clampedLen));
   s.values.assign(static_cast<std::size_t>(clampedLen), 0.0);
   for (int i = 0; i < clampedLen; ++i) {

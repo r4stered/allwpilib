@@ -17,16 +17,19 @@ const Spectrum* FrequencyPlotNodeLogic::SpectrumFor(int slot,
     return nullptr;
   }
   if (c.input == sig && c.revision == sig->revision &&
-      c.sampleRate == sig->sampleRate) {
+      c.sampleRate == sig->sampleRate && c.transient == sig->transient) {
     return c.spectrum ? &*c.spectrum : nullptr;
   }
   c.input = sig;
   c.revision = sig->revision;
   c.sampleRate = sig->sampleRate;
+  c.transient = sig->transient;
   // Compute's own guards (rate, length) decide whether there is a spectrum;
   // a signal that fails them is cached as "none" so it isn't retried each
   // frame either.
-  c.spectrum = Spectrum::Compute(sig->values, sig->sampleRate);
+  c.spectrum = Spectrum::Compute(
+      sig->values, sig->sampleRate,
+      sig->transient ? SpectrumMode::kTransient : SpectrumMode::kStationary);
   ++m_computeCount;
   return c.spectrum ? &*c.spectrum : nullptr;
 }

@@ -134,6 +134,23 @@ TEST_CASE("BiquadStageNodeLogicTest FilteredAppliesCascadeAndPreservesLength",
   CHECK_NEAR(maxOut, maxIn, 0.2);
 }
 
+TEST_CASE("BiquadStageNodeLogicTest FilteredCarriesTheTransientFlag",
+          "[filterdesigner]") {
+  // A filtered impulse is still a transient: the Frequency Plot must keep
+  // transforming it without a window to show the filter's response.
+  BiquadStageNodeLogic logic;
+  Signal in = SineSignal(10.0, 1000.0, 64, "x");
+  in.transient = true;
+  const Signal* out = logic.Filtered(&in);
+  REQUIRE(out != nullptr);
+  CHECK(out->transient);
+
+  Signal steady = SineSignal(10.0, 1000.0, 64, "y");
+  const Signal* steadyOut = logic.Filtered(&steady);
+  REQUIRE(steadyOut != nullptr);
+  CHECK_FALSE(steadyOut->transient);
+}
+
 TEST_CASE("BiquadStageNodeLogicTest FilteredRepeatPullReturnsConsistentResult",
           "[filterdesigner]") {
   BiquadStageNodeLogic logic;

@@ -10,6 +10,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/model/Signal.hpp"
 #include "wpi/filterdesigner/model/Spectrum.hpp"
 
@@ -44,6 +45,48 @@ TEST_CASE("FrequencyPlotNodeLogicTest UnchangedSignalIsTransformedOnce",
   const Spectrum* again = logic.SpectrumFor(0, &in);
   CHECK(again == first);
   CHECK(logic.SpectrumComputeCount() == 1u);
+}
+
+Signal ImpulseSignal(double fs, std::size_t n) {
+  Signal s;
+  s.name = "impulse";
+  for (std::size_t i = 0; i < n; ++i) {
+    s.timestamps.push_back(static_cast<double>(i) / fs);
+    s.values.push_back(i == 0 ? 1.0 : 0.0);
+  }
+  s.sampleRate = fs;
+  s.revision = 1;
+  return s;
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest TransientIsTransformedWithoutAWindow",
+          "[filterdesigner]") {
+  // The Hann window is zero at index 0, where an impulse sits; a transient
+  // must skip it or an Impulse node plots as silence.
+  FrequencyPlotNodeLogic logic;
+  Signal in = ImpulseSignal(1000.0, 64);
+  in.transient = true;
+  const Spectrum* spec = logic.SpectrumFor(0, &in);
+  REQUIRE(spec != nullptr);
+  for (double db : spec->magnitudesDb) {
+    CHECK_NEAR(db, 0.0, 1e-9);
+  }
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest TransientFlagChangeRecomputes",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  Signal in = ImpulseSignal(1000.0, 64);
+  const Spectrum* stationary = logic.SpectrumFor(0, &in);
+  REQUIRE(stationary != nullptr);
+  CHECK(stationary->magnitudesDb[0] < -200.0);
+  CHECK(logic.SpectrumComputeCount() == 1u);
+
+  in.transient = true;
+  const Spectrum* transient = logic.SpectrumFor(0, &in);
+  REQUIRE(transient != nullptr);
+  CHECK(logic.SpectrumComputeCount() == 2u);
+  CHECK_NEAR(transient->magnitudesDb[0], 0.0, 1e-9);
 }
 
 TEST_CASE("FrequencyPlotNodeLogicTest RevisionBumpRecomputes",

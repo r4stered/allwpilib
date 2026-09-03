@@ -207,6 +207,7 @@ const Signal* BiquadStageNodeLogic::Filtered(const Signal* input) const {
   out.quality = input->quality;
   out.revision = ++m_outRevision;
   out.live = input->live;
+  out.transient = input->transient;
   m_filteredCache = std::move(out);
   m_filteredInput = input;
   m_filteredInputRev = input->revision;

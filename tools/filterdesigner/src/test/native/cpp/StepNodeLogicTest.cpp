@@ -25,6 +25,8 @@ TEST_CASE("StepNodeLogicTest DefaultsProduceUnitStepStartingAtZero",
   }
   CHECK(sig->values.size() == 200u);
   CHECK_DOUBLE_EQ(sig->sampleRate, 1000.0);
+  UNSCOPED_INFO("a step is a transient: the Frequency Plot skips the window");
+  CHECK(sig->transient);
 }
 
 TEST_CASE("StepNodeLogicTest StartSampleDelaysStep", "[filterdesigner]") {
