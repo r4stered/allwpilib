@@ -68,7 +68,6 @@ void WpiLogSource::ScanEntries() {
       it->second.type = std::string{start.type};
       m_entries.push_back({name, it->second.type, IsNumericType(start.type)});
     }
-    it->second.ids.push_back(start.entry);
   }
 }
 
@@ -86,15 +85,41 @@ std::optional<Signal> WpiLogSource::LoadEntryRaw(std::string_view name) const {
   if (it == m_entryIndex.end() || !IsNumericType(it->second.type)) {
     return std::nullopt;
   }
-  const auto& [type, ids] = it->second;
+  const std::string& type = it->second.type;
 
   Signal sig;
   sig.name = std::string{name};
+  // An entry id belongs to a name only between its Start and Finish records;
+  // a Finish'd id may be handed to a different name later in the file. So
+  // rather than matching on every id the name ever held, walk the control
+  // records alongside the data and keep the set of ids live for this name.
+  // Usually one, so linear search is fine.
+  std::vector<int> liveIds;
   for (const auto& record : *m_reader) {
+    if (record.IsStart()) {
+      wpi::log::StartRecordData start;
+      if (!record.GetStartData(&start)) {
+        continue;
+      }
+      // Whoever the id was live for before, it belongs to this name now.
+      std::erase(liveIds, start.entry);
+      if (start.name == name) {
+        liveIds.push_back(start.entry);
+      }
+      continue;
+    }
+    if (record.IsFinish()) {
+      int finished = 0;
+      if (record.GetFinishEntry(&finished)) {
+        std::erase(liveIds, finished);
+      }
+      continue;
+    }
     if (record.IsControl()) {
       continue;
     }
-    if (std::find(ids.begin(), ids.end(), record.GetEntry()) == ids.end()) {
+    if (std::find(liveIds.begin(), liveIds.end(), record.GetEntry()) ==
+        liveIds.end()) {
       continue;
     }
     double value = 0.0;

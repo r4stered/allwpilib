@@ -9,10 +9,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -400,6 +403,92 @@ TEST_CASE_METHOD(WpiLogSourceTest,
   CHECK_DOUBLE_EQ(sig->values[1], 2.0);
   CHECK_DOUBLE_EQ(sig->values[2], 3.0);
   CHECK_DOUBLE_EQ(sig->values[3], 4.0);
+}
+
+// Hand-built WPILOG bytes. DataLogWriter never reuses an entry id, but the
+// format allows one to be Finish'd and reissued to a different name, and a
+// third-party writer may do so.
+class RawWpiLog {
+ public:
+  RawWpiLog() {
+    static const uint8_t header[] = {'W', 'P', 'I', 'L', 'O', 'G',
+                                     0,   1,   0,   0,   0,   0};
+    bytes.insert(bytes.end(), std::begin(header), std::end(header));
+  }
+
+  void Start(int id, std::string_view name, std::string_view type,
+             int64_t micros) {
+    std::vector<uint8_t> payload{0};  // control: start
+    U32(payload, static_cast<uint32_t>(id));
+    Str(payload, name);
+    Str(payload, type);
+    Str(payload, "");
+    Record(0, micros, payload);
+  }
+
+  void Finish(int id, int64_t micros) {
+    std::vector<uint8_t> payload{1};  // control: finish
+    U32(payload, static_cast<uint32_t>(id));
+    Record(0, micros, payload);
+  }
+
+  void Double(int id, double value, int64_t micros) {
+    std::vector<uint8_t> payload(8);
+    std::memcpy(payload.data(), &value, 8);
+    Record(id, micros, payload);
+  }
+
+  std::vector<uint8_t> bytes;
+
+ private:
+  static void U32(std::vector<uint8_t>& out, uint32_t v) {
+    for (int i = 0; i < 4; ++i) {
+      out.push_back(static_cast<uint8_t>(v >> (8 * i)));
+    }
+  }
+  static void Str(std::vector<uint8_t>& out, std::string_view s) {
+    U32(out, static_cast<uint32_t>(s.size()));
+    out.insert(out.end(), s.begin(), s.end());
+  }
+  void Record(int id, int64_t micros, const std::vector<uint8_t>& payload) {
+    // Fixed-width header: 4-byte id, 4-byte size, 8-byte timestamp.
+    bytes.push_back(0x7F);
+    U32(bytes, static_cast<uint32_t>(id));
+    U32(bytes, static_cast<uint32_t>(payload.size()));
+    for (int i = 0; i < 8; ++i) {
+      bytes.push_back(static_cast<uint8_t>(micros >> (8 * i)));
+    }
+    bytes.insert(bytes.end(), payload.begin(), payload.end());
+  }
+};
+
+TEST_CASE("WpiLogSourceTest ReusedIdOnlyMatchesWhileLiveForName",
+          "[filterdesigner]") {
+  RawWpiLog raw;
+  raw.Start(1, "first", "double", 1'000);
+  raw.Double(1, 10.0, 2'000);
+  raw.Double(1, 11.0, 3'000);
+  raw.Finish(1, 4'000);
+  raw.Start(1, "second", "double", 5'000);
+  raw.Double(1, 20.0, 6'000);
+  raw.Double(1, 21.0, 7'000);
+
+  auto src = WpiLogSource::FromBuffer(raw.bytes);
+  REQUIRE(src.has_value());
+  CHECK(src->Entries().size() == 2u);
+
+  auto first = src->LoadEntryRaw("first");
+  REQUIRE(first.has_value());
+  UNSCOPED_INFO("records logged after the Finish belong to the other name");
+  REQUIRE(first->values.size() == 2u);
+  CHECK_DOUBLE_EQ(first->values[0], 10.0);
+  CHECK_DOUBLE_EQ(first->values[1], 11.0);
+
+  auto second = src->LoadEntryRaw("second");
+  REQUIRE(second.has_value());
+  REQUIRE(second->values.size() == 2u);
+  CHECK_DOUBLE_EQ(second->values[0], 20.0);
+  CHECK_DOUBLE_EQ(second->values[1], 21.0);
 }
 
 TEST_CASE_METHOD(WpiLogSourceTest, "WpiLogSourceTest FromFileRoundTrips",

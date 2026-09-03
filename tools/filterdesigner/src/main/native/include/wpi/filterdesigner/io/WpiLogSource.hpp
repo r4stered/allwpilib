@@ -68,9 +68,6 @@ class WpiLogSource {
  private:
   struct EntryInfo {
     std::string type;
-    // A name spans multiple IDs if the log was Finish'd and restarted.
-    // Usually 1, so linear search is fine.
-    std::vector<int> ids;
   };
 
   explicit WpiLogSource(std::unique_ptr<wpi::log::DataLogReader> reader);
