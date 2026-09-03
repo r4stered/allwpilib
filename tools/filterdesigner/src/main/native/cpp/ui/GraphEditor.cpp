@@ -65,8 +65,8 @@ GraphEditor::GraphEditor(std::string_view saveDir)
 
 GraphEditor::~GraphEditor() = default;
 
-void GraphEditor::RequestAddNodeAtMouse() {
-  m_creationPopup->RequestOpenAtMouse();
+void GraphEditor::RequestAddNode() {
+  m_creationPopup->RequestOpen();
 }
 
 #ifndef RUNNING_FILTERDESIGNER_TESTS
@@ -146,7 +146,7 @@ void GraphEditor::Display() {
   }
   ImGui::SameLine();
   if (ImGui::Button("Add Node")) {
-    RequestAddNodeAtMouse();
+    RequestAddNode();
   }
   if (!m_status.empty()) {
     ImGui::SameLine();

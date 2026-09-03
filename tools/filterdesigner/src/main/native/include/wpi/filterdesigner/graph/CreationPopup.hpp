@@ -20,7 +20,7 @@ class NodeRegistry;
  *
  *   - Right-click on empty canvas (hooked through ImNodeFlow's
  *     `rightClickPopUpContent`).
- *   - "Add Node" in the menu bar (call @ref RequestOpenAtMouse).
+ *   - "Add Node" in the menu bar (call @ref RequestOpen).
  *   - Drag a wire onto empty canvas (hooked through ImNodeFlow's
  *     `droppedLinkPopUpContent`; the dragged pin filters the menu and the
  *     popup auto-wires the resulting link after the node is created).
@@ -38,11 +38,11 @@ class CreationPopup {
   void Attach();
 
   /**
-   * Queues the "external" (menu-bar) popup to open at the current mouse
-   * position on the next frame. The popup actually opens during the next
-   * @ref DrawExternal call.
+   * Queues the "external" (menu-bar) popup to open during the next
+   * @ref DrawExternal call. The request comes from the toolbar, above the
+   * canvas, so a node it creates lands at the centre of the visible canvas.
    */
-  void RequestOpenAtMouse();
+  void RequestOpen();
 
   /**
    * Renders the menu-bar-triggered popup. Must be called every frame inside an
@@ -71,6 +71,13 @@ class CreationPopup {
   const NodeRegistry* m_registry;
   [[maybe_unused]]
   bool m_openExternalRequested = false;
+  /**
+   * Where a created node goes, in grid coordinates. Captured the frame a
+   * popup opens: by the time a menu item is clicked the mouse is on that
+   * item, not where the user asked for the node.
+   */
+  [[maybe_unused]]
+  ImVec2 m_gridPos{};
 };
 
 }  // namespace wpi::filterdesigner

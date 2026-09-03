@@ -70,26 +70,37 @@ CreationPopup::CreationPopup(Graph& graph, const NodeRegistry& registry)
 void CreationPopup::Attach() {
   ImFlow::ImNodeFlow& editor = m_graph->Editor();
 
-  editor.rightClickPopUpContent([this](ImFlow::BaseNode* hovered) {
-    if (hovered) {
-      // Right-click on a node has no menu of its own yet.
-      return;
+  // Both popups open on the frame of the click or drop, with the mouse still
+  // where the user wants the node. Read it then; by the next frame it is on
+  // its way to a menu item.
+  auto captureMouseOnOpen = [this] {
+    if (ImGui::IsWindowAppearing()) {
+      m_gridPos = m_graph->Editor().screen2grid(ImGui::GetMousePos());
     }
-    ImVec2 gridPos = m_graph->Editor().screen2grid(ImGui::GetMousePos());
-    if (DrawMenuItems(gridPos, nullptr)) {
-      ImGui::CloseCurrentPopup();
-    }
-  });
+  };
 
-  editor.droppedLinkPopUpContent([this](ImFlow::Pin* dragged) {
-    ImVec2 gridPos = m_graph->Editor().screen2grid(ImGui::GetMousePos());
-    if (DrawMenuItems(gridPos, dragged)) {
-      ImGui::CloseCurrentPopup();
-    }
-  });
+  editor.rightClickPopUpContent(
+      [this, captureMouseOnOpen](ImFlow::BaseNode* hovered) {
+        if (hovered) {
+          // Right-click on a node has no menu of its own yet.
+          return;
+        }
+        captureMouseOnOpen();
+        if (DrawMenuItems(m_gridPos, nullptr)) {
+          ImGui::CloseCurrentPopup();
+        }
+      });
+
+  editor.droppedLinkPopUpContent(
+      [this, captureMouseOnOpen](ImFlow::Pin* dragged) {
+        captureMouseOnOpen();
+        if (DrawMenuItems(m_gridPos, dragged)) {
+          ImGui::CloseCurrentPopup();
+        }
+      });
 }
 
-void CreationPopup::RequestOpenAtMouse() {
+void CreationPopup::RequestOpen() {
   m_openExternalRequested = true;
 }
 
@@ -99,8 +110,16 @@ void CreationPopup::DrawExternal() {
     m_openExternalRequested = false;
   }
   if (ImGui::BeginPopup(kExternalPopupId)) {
-    ImVec2 gridPos = m_graph->Editor().screen2grid(ImGui::GetMousePos());
-    if (DrawMenuItems(gridPos, nullptr)) {
+    if (ImGui::IsWindowAppearing()) {
+      // The request came from the toolbar, above the canvas, so the mouse
+      // is nowhere useful: put the node at the centre of the visible canvas.
+      ImFlow::ImNodeFlow& editor = m_graph->Editor();
+      const ImVec2 pos = editor.getPos();
+      const ImVec2 size = editor.getGrid().size();
+      m_gridPos = editor.screen2grid(
+          ImVec2{pos.x + size.x * 0.5f, pos.y + size.y * 0.5f});
+    }
+    if (DrawMenuItems(m_gridPos, nullptr)) {
       ImGui::CloseCurrentPopup();
     }
     ImGui::EndPopup();
@@ -168,7 +187,7 @@ class NodeRegistry;
 CreationPopup::CreationPopup(Graph& graph, const NodeRegistry& registry)
     : m_graph(&graph), m_registry(&registry) {}
 void CreationPopup::Attach() {}
-void CreationPopup::RequestOpenAtMouse() {}
+void CreationPopup::RequestOpen() {}
 void CreationPopup::DrawExternal() {}
 bool CreationPopup::DrawMenuItems(const ImVec2&, ImFlow::Pin*) {
   return false;

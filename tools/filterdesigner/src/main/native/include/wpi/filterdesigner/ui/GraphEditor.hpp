@@ -37,8 +37,11 @@ class GraphEditor {
   /** Renders the canvas + popups. Must be called inside an ImGui window. */
   void Display();
 
-  /** Routes a menu-bar "Add Node" click into the creation popup. */
-  void RequestAddNodeAtMouse();
+  /**
+   * Routes a menu-bar "Add Node" click into the creation popup. The node
+   * lands at the centre of the visible canvas.
+   */
+  void RequestAddNode();
 
   /** Opens a system save-file dialog. Saves to that path on confirm. */
   void RequestSave();
