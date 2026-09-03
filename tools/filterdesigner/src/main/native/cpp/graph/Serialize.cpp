@@ -251,7 +251,22 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     FilterDesignerNode* src = graph.FindNodeById(*srcGraphId);
     FilterDesignerNode* dst = graph.FindNodeById(*dstGraphId);
     if (!src || !dst) {
-      // Endpoint was skipped earlier, and already warned about.
+      // An endpoint listed in "nodes" was skipped there with its own warning.
+      // One the file never defines has had none, and dropping its link in
+      // silence reports a clean load and then makes the loss permanent on
+      // the next save.
+      if (!seenIds.contains(*srcGraphId)) {
+        result.warnings.emplace_back("Link references node " +
+                                     std::to_string(*srcGraphId) +
+                                     ", which the file never defines — "
+                                     "skipped");
+      }
+      if (*dstGraphId != *srcGraphId && !seenIds.contains(*dstGraphId)) {
+        result.warnings.emplace_back("Link references node " +
+                                     std::to_string(*dstGraphId) +
+                                     ", which the file never defines — "
+                                     "skipped");
+      }
       continue;
     }
     ImFlow::Pin* outPin = FindOutPinByName(src, srcPin->get_string());
@@ -274,6 +289,19 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
       continue;
     }
     inPin->createLink(outPin);
+    // createLink returns void and declines in silence whenever its connection
+    // filter says no — a filter output wired into a signal input, say — or
+    // when the two ends share a node. The wire is gone from the graph either
+    // way, and the next save writes it out without it.
+    if (auto created = inPin->getLink().lock();
+        !created || created->left() != outPin) {
+      result.warnings.emplace_back(
+          "Link from node " + std::to_string(*srcGraphId) + " pin '" +
+          srcPin->get_string() + "' to node " + std::to_string(*dstGraphId) +
+          " pin '" + dstPin->get_string() +
+          "' is not a valid connection — "
+          "skipped");
+    }
   }
 
   return result;

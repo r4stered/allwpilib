@@ -57,6 +57,31 @@ class FakeSinkNode : public FilterDesignerNode {
   std::string_view TypeTag() const override { return "FakeSink"; }
 };
 
+// Same shape as FakeSourceNode with an output of another type, for the pin
+// filter to reject. Registered per-test rather than in RegisterFakes so the
+// fake registry keeps exactly one source everywhere else.
+class FakeDoubleSourceNode : public FilterDesignerNode {
+ public:
+  FakeDoubleSourceNode() {
+    setTitle("Fake Double Source");
+    addOUT<double>("out")->behaviour([] { return 1.0; });
+  }
+  std::string_view TypeTag() const override { return "FakeDoubleSource"; }
+};
+
+void RegisterDoubleSource(NodeRegistry& reg) {
+  NodeRegistry::Entry src;
+  src.tag = "FakeDoubleSource";
+  src.menuLabel = "Fake Double Source";
+  src.menuCategory = "Sources";
+  src.outputTypes.emplace_back(typeid(double));
+  src.factory = [](Graph& g, const ImVec2& pos) {
+    return std::static_pointer_cast<FilterDesignerNode>(
+        g.AddNode<FakeDoubleSourceNode>(pos));
+  };
+  reg.Register(std::move(src));
+}
+
 void RegisterFakes(NodeRegistry& reg) {
   NodeRegistry::Entry src;
   src.tag = "FakeSource";
@@ -339,6 +364,89 @@ TEST_CASE("SerializeTest OutOfFloatRangePosSkippedWithWarning",
   UNSCOPED_INFO("both nodes must be skipped, with a warning each");
   CHECK(result.warnings.size() == 2);
   CHECK(graph.Nodes().empty());
+}
+
+TEST_CASE("SerializeTest LinkToUndefinedNodeWarns", "[filterdesigner]") {
+  // Node 99 is nowhere in "nodes", so nothing has warned about it yet.
+  // Dropping its link quietly would report a clean load and then drop the
+  // wiring for good the next time the design is saved.
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 2, "type": "FakeSink", "pos": [100, 0]}
+    ],
+    "links": [
+      {"src": {"node": 1, "pin": "out"}, "dst": {"node": 99, "pin": "in"}}
+    ]
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(result.warnings.size() == 1);
+  UNSCOPED_INFO(result.warnings[0]);
+  CHECK(result.warnings[0].find("99") != std::string::npos);
+  CHECK(graph.Links().empty());
+}
+
+TEST_CASE("SerializeTest LinkToAlreadyReportedNodeWarnsOnce",
+          "[filterdesigner]") {
+  // Node 2 was skipped with its own warning, so the link it leaves dangling
+  // must not produce a second one about the same problem.
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FakeSource", "pos": [0, 0]},
+      {"id": 2, "type": "NoSuchType", "pos": [100, 0]}
+    ],
+    "links": [
+      {"src": {"node": 1, "pin": "out"}, "dst": {"node": 2, "pin": "in"}}
+    ]
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(result.warnings.size() == 1);
+  UNSCOPED_INFO(result.warnings[0]);
+  CHECK(result.warnings[0].find("NoSuchType") != std::string::npos);
+}
+
+TEST_CASE("SerializeTest LinkRejectedByPinTypeWarns", "[filterdesigner]") {
+  // Both endpoints exist and name real pins, but the pins disagree on type,
+  // so ImNodeFlow's connection filter drops the link without a word.
+  NodeRegistry reg;
+  RegisterFakes(reg);
+  RegisterDoubleSource(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FakeDoubleSource", "pos": [0, 0]},
+      {"id": 2, "type": "FakeSink", "pos": [100, 0]}
+    ],
+    "links": [
+      {"src": {"node": 1, "pin": "out"}, "dst": {"node": 2, "pin": "in"}}
+    ]
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(result.warnings.size() == 1);
+  UNSCOPED_INFO(result.warnings[0]);
+  CHECK(graph.Links().empty());
+  CHECK(graph.Nodes().size() == 2);
 }
 
 TEST_CASE("SerializeTest GraphResetCallbackFiresOnDeserialize",
