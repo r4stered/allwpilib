@@ -256,6 +256,40 @@ TEST_CASE("SerializeTest DuplicateLinkSkippedWithWarning", "[filterdesigner]") {
   CHECK(links[0].dstId == 2);
 }
 
+TEST_CASE("SerializeTest ConflictingLinkSkippedWithWarning",
+          "[filterdesigner]") {
+  // An input pin holds one link. ImNodeFlow's createLink silently swaps in a
+  // second source, so a file wiring two sources into one input would load
+  // with the last one listed and the next save would make that permanent.
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FakeSource", "pos": [0, 0], "value": 1},
+      {"id": 2, "type": "FakeSource", "pos": [0, 50], "value": 2},
+      {"id": 3, "type": "FakeSink", "pos": [100, 0]}
+    ],
+    "links": [
+      {"src": {"node": 1, "pin": "out"}, "dst": {"node": 3, "pin": "in"}},
+      {"src": {"node": 2, "pin": "out"}, "dst": {"node": 3, "pin": "in"}}
+    ]
+  })";
+
+  Graph graph;
+  auto result = DeserializeGraph(json, graph, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(result.warnings.size() == 1u);
+  CHECK(result.warnings[0].find("Conflicting link") != std::string::npos);
+  auto links = graph.Links();
+  REQUIRE(links.size() == 1u);
+  UNSCOPED_INFO("the first link listed must win");
+  CHECK(links[0].srcId == 1);
+  CHECK(links[0].dstId == 3);
+}
+
 TEST_CASE("SerializeTest NonNumericPosSkippedWithWarning", "[filterdesigner]") {
   // A malformed pos field is skipped with a warning; get_number() on it
   // would throw or abort in a release build.
