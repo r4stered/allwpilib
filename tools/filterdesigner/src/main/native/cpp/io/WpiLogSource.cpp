@@ -63,10 +63,25 @@ void WpiLogSource::ScanEntries() {
       continue;
     }
     std::string name{start.name};
+    const bool numeric = IsNumericType(start.type);
     auto [it, inserted] = m_entryIndex.try_emplace(name);
     if (inserted) {
       it->second.type = std::string{start.type};
-      m_entries.push_back({name, it->second.type, IsNumericType(start.type)});
+      it->second.numeric = numeric;
+      it->second.entryIndex = m_entries.size();
+      m_entries.push_back({name, it->second.type, numeric});
+      continue;
+    }
+    // A name whose first lifetime was a string but which comes back later as
+    // a double does hold a loadable timeseries, and freezing the first
+    // announcement would grey it out in the picker for good. The first
+    // numeric lifetime is the one worth naming: labelling the row with a
+    // type it will not load reads as an error in the file.
+    if (numeric && !it->second.numeric) {
+      it->second.type = std::string{start.type};
+      it->second.numeric = true;
+      m_entries[it->second.entryIndex].type = it->second.type;
+      m_entries[it->second.entryIndex].numeric = true;
     }
   }
 }
@@ -82,7 +97,7 @@ std::optional<Signal> WpiLogSource::LoadEntry(std::string_view name) const {
 
 std::optional<Signal> WpiLogSource::LoadEntryRaw(std::string_view name) const {
   auto it = m_entryIndex.find(std::string{name});
-  if (it == m_entryIndex.end() || !IsNumericType(it->second.type)) {
+  if (it == m_entryIndex.end() || !it->second.numeric) {
     return std::nullopt;
   }
   const std::string& type = it->second.type;

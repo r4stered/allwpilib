@@ -449,6 +449,13 @@ class RawWpiLog {
     Record(id, micros, payload);
   }
 
+  // A string record's payload is the raw text; the record header carries its
+  // length.
+  void String(int id, std::string_view value, int64_t micros) {
+    std::vector<uint8_t> payload(value.begin(), value.end());
+    Record(id, micros, payload);
+  }
+
   std::vector<uint8_t> bytes;
 
  private:
@@ -500,6 +507,71 @@ TEST_CASE("WpiLogSourceTest ReusedIdOnlyMatchesWhileLiveForName",
   REQUIRE(second->values.size() == 2u);
   CHECK_DOUBLE_EQ(second->values[0], 20.0);
   CHECK_DOUBLE_EQ(second->values[1], 21.0);
+}
+
+TEST_CASE("WpiLogSourceTest NameTurningNumericBecomesSelectable",
+          "[filterdesigner]") {
+  // The name opens as a string and comes back as a double. Judging it by its
+  // first announcement alone greys it out in the picker for good, even
+  // though the second half of the file is a perfectly good timeseries.
+  RawWpiLog raw;
+  raw.Start(1, "s", "string", 1'000);
+  raw.String(1, "hello", 2'000);
+  raw.Finish(1, 3'000);
+  raw.Start(1, "s", "double", 4'000);
+  raw.Double(1, 4.5, 5'000);
+
+  auto src = WpiLogSource::FromBuffer(raw.bytes);
+  REQUIRE(src.has_value());
+  REQUIRE(src->Entries().size() == 1u);
+  CHECK(src->Entries()[0].numeric);
+  UNSCOPED_INFO("the row is labelled with the type it will actually load");
+  CHECK(src->Entries()[0].type == "double");
+
+  auto sig = src->LoadEntryRaw("s");
+  REQUIRE(sig.has_value());
+  UNSCOPED_INFO("the string lifetime contributes nothing");
+  REQUIRE(sig->values.size() == 1u);
+  CHECK_DOUBLE_EQ(sig->values[0], 4.5);
+}
+
+TEST_CASE("WpiLogSourceTest NameLosingNumericKeepsItsNumericType",
+          "[filterdesigner]") {
+  // The reverse order: a later non-numeric lifetime must not take the label
+  // away from the numeric one that already earned it.
+  RawWpiLog raw;
+  raw.Start(1, "m", "double", 1'000);
+  raw.Double(1, 1.5, 2'000);
+  raw.Finish(1, 3'000);
+  raw.Start(1, "m", "string", 4'000);
+  raw.String(1, "later", 5'000);
+
+  auto src = WpiLogSource::FromBuffer(raw.bytes);
+  REQUIRE(src.has_value());
+  REQUIRE(src->Entries().size() == 1u);
+  CHECK(src->Entries()[0].numeric);
+  CHECK(src->Entries()[0].type == "double");
+
+  auto sig = src->LoadEntryRaw("m");
+  REQUIRE(sig.has_value());
+  REQUIRE(sig->values.size() == 1u);
+  CHECK_DOUBLE_EQ(sig->values[0], 1.5);
+}
+
+TEST_CASE("WpiLogSourceTest NameThatIsNeverNumericStaysUnloadable",
+          "[filterdesigner]") {
+  RawWpiLog raw;
+  raw.Start(1, "t", "string", 1'000);
+  raw.String(1, "one", 2'000);
+  raw.Finish(1, 3'000);
+  raw.Start(1, "t", "string[]", 4'000);
+
+  auto src = WpiLogSource::FromBuffer(raw.bytes);
+  REQUIRE(src.has_value());
+  REQUIRE(src->Entries().size() == 1u);
+  CHECK_FALSE(src->Entries()[0].numeric);
+  CHECK(src->Entries()[0].type == "string");
+  CHECK_FALSE(src->LoadEntryRaw("t").has_value());
 }
 
 TEST_CASE("WpiLogSourceTest RestartedEntryDecodedWithItsOwnType",

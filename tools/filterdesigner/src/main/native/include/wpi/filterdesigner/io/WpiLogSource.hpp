@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -67,7 +68,17 @@ class WpiLogSource {
 
  private:
   struct EntryInfo {
+    /**
+     * The type the picker labels the name with and LoadEntryRaw judges it
+     * by: the first numeric type any of the name's lifetimes announced, or
+     * the first type of all when none of them is numeric. A name is free to
+     * be finished and restarted under another type, so the first
+     * announcement alone does not say what the name holds.
+     */
     std::string type;
+    bool numeric = false;
+    /** Index into m_entries, so a later lifetime can revise the label. */
+    std::size_t entryIndex = 0;
   };
 
   explicit WpiLogSource(std::unique_ptr<wpi::log::DataLogReader> reader);
