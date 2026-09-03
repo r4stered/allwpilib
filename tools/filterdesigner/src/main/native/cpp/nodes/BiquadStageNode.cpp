@@ -22,6 +22,7 @@
 #include <imgui.h>
 
 #include "wpi/filterdesigner/graph/Topology.hpp"
+#include "wpi/filterdesigner/nodes/StatusText.hpp"
 #endif
 
 namespace wpi::filterdesigner {
@@ -346,11 +347,9 @@ void BiquadStageNode::draw() {
   const DesignedFilter* combined = CombinedFilter();
   m_logic->Filtered(input);
   if (!combined) {
-    ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s",
-                       CombinedError().c_str());
+    DrawStatusText(kStatusErrorColor, CombinedError());
   } else if (!m_logic->FilterError().empty()) {
-    ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s",
-                       m_logic->FilterError().c_str());
+    DrawStatusText(kStatusErrorColor, m_logic->FilterError());
   } else if (const DesignedFilter* self = m_logic->Filter();
              self && combined->sections.size() > self->sections.size()) {
     ImGui::TextDisabled("Cascade: %zu sections (this stage: %zu)",

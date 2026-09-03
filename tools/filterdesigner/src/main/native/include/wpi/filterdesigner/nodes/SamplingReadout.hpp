@@ -9,6 +9,7 @@
 #include <imgui.h>
 
 #include "wpi/filterdesigner/model/Signal.hpp"
+#include "wpi/filterdesigner/nodes/StatusText.hpp"
 
 namespace wpi::filterdesigner {
 
@@ -20,18 +21,22 @@ namespace wpi::filterdesigner {
  * while being mostly interpolant across a disabled period. This line is where
  * the user finds out, escalating grey to amber to red as the reconstruction
  * takes over — see @ref ClassifySampling.
+ *
+ * Wraps at @p wrapWidth: with a gap figure the line outgrows a source node's
+ * widgets, and the node would follow it.
  */
-inline void DrawSamplingReadout(const Signal& signal) {
+inline void DrawSamplingReadout(const Signal& signal,
+                                float wrapWidth = kStatusWrapWidth) {
   const std::string text = DescribeSampling(signal);
   switch (ClassifySampling(signal)) {
     case SamplingSeverity::Warn:
-      ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.3f, 1.0f}, "%s", text.c_str());
+      DrawStatusText(kStatusWarnColor, text, wrapWidth);
       break;
     case SamplingSeverity::Bad:
-      ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s", text.c_str());
+      DrawStatusText(kStatusErrorColor, text, wrapWidth);
       break;
     case SamplingSeverity::Ok:
-      ImGui::TextDisabled("%s", text.c_str());
+      DrawStatusTextDisabled(text, wrapWidth);
       break;
   }
 }

@@ -30,6 +30,7 @@
 
 #include "wpi/filterdesigner/nodes/NameTreePicker.hpp"
 #include "wpi/filterdesigner/nodes/SamplingReadout.hpp"
+#include "wpi/filterdesigner/nodes/StatusText.hpp"
 #endif
 
 namespace wpi::filterdesigner {
@@ -352,8 +353,8 @@ void WpiLogSourceNode::DrawBody() {
         std::filesystem::path{m_logic->LogPath()}.filename().string().c_str());
   }
   if (!m_logic->LoadError().empty()) {
-    ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s",
-                       m_logic->LoadError().c_str());
+    DrawStatusText(kStatusErrorColor, m_logic->LoadError(),
+                   std::max(kMinContentWidth, m_contentWidth));
   }
   if (!m_logic->HasFile()) {
     ImGui::TextDisabled("No log loaded.");
@@ -381,7 +382,7 @@ void WpiLogSourceNode::DrawBody() {
   DrawTimeline();
 
   if (const auto* signal = m_logic->Signal()) {
-    DrawSamplingReadout(*signal);
+    DrawSamplingReadout(*signal, std::max(kMinContentWidth, m_contentWidth));
   }
 }
 

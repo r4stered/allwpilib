@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <format>
 #include <memory>
 #include <utility>
 
@@ -29,6 +30,7 @@
 #include "wpi/filterdesigner/graph/Topology.hpp"
 #include "wpi/filterdesigner/model/PoleZero.hpp"
 #include "wpi/filterdesigner/nodes/BiquadStageNode.hpp"
+#include "wpi/filterdesigner/nodes/StatusText.hpp"
 #endif
 
 namespace wpi::filterdesigner {
@@ -131,8 +133,8 @@ void PoleZeroPlotNode::draw() {
     std::string upstreamErr =
         BiquadStageNode::UpstreamErrorFor(inPin(kInputNames[i]));
     if (!upstreamErr.empty()) {
-      ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "in%d: %s", i,
-                         upstreamErr.c_str());
+      DrawStatusText(kStatusErrorColor, std::format("in{}: {}", i, upstreamErr),
+                     m_logic->plotWidth);
     }
   }
 

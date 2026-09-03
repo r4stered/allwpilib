@@ -15,6 +15,7 @@
 
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
+#include "wpi/filterdesigner/nodes/StatusText.hpp"
 
 namespace wpi::filterdesigner {
 
@@ -161,8 +162,7 @@ bool DrawCycleBannerIfAny(FilterDesignerNode* node) {
   if (!g || g->CycleError().empty()) {
     return false;
   }
-  ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "Graph cycle: %s",
-                     g->CycleError().c_str());
+  DrawStatusText(kStatusErrorColor, "Graph cycle: " + g->CycleError());
   return true;
 }
 

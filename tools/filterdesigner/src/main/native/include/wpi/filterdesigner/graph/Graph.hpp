@@ -139,6 +139,27 @@ class Graph {
   void ConfigureEditor();
 
   /**
+   * Carries the host ImGui context's per-context settings into ImNodeFlow's
+   * inner one. ImNodeFlow draws every node inside a second context it creates
+   * on its first update(); it copies the style struct across each frame and
+   * shares the font atlas, but nothing else, so anything installed on the
+   * host context alone is missing inside nodes:
+   *
+   *   - Clipboard handlers. The platform backend only installed its on the
+   *     host, so a node's ImGui::SetClipboardText hit ImGui's fallback, on
+   *     macOS and Linux a private in-memory buffer: Copy "worked" without
+   *     reaching the system clipboard, and paste into a node's text field
+   *     read that same buffer.
+   *   - The default font. io.FontDefault is per context, and the inner one
+   *     falls back to the atlas's first font, so a font picked in the View
+   *     menu (or a changed wpigui default) changed the chrome but not the
+   *     nodes.
+   *
+   * No-op in test builds.
+   */
+  void SyncInnerContext();
+
+  /**
    * Pulls the active ImGui style's colors into ImNodeFlow's grid and per-node
    * style fields so the editor follows the host wpigui theme. Header colors
    * stay at their per-category values; only body, border and grid follow.

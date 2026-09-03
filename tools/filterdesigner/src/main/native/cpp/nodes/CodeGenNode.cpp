@@ -16,12 +16,14 @@
 #include "wpi/filterdesigner/nodes/BiquadStageNode.hpp"
 
 #ifndef RUNNING_FILTERDESIGNER_TESTS
+#include <algorithm>
 #include <cstdio>
 #include <string>
 
 #include <imgui.h>
 
 #include "wpi/filterdesigner/graph/Topology.hpp"
+#include "wpi/filterdesigner/nodes/StatusText.hpp"
 #endif
 
 namespace wpi::filterdesigner {
@@ -82,6 +84,11 @@ void CodeGenNode::draw() {
   }
 
   const float kItemWidth = 220.0f;
+  // The code box grows to its widest line up to this, then scrolls. A section
+  // line carries five 17-significant-digit doubles, so at the default font it
+  // runs to roughly four times kItemWidth.
+  constexpr float kMaxCodeWidth = 720.0f;
+  constexpr float kMaxCodeHeight = 320.0f;
 
   int langIdx = static_cast<int>(m_logic->lang);
   ImGui::SetNextItemWidth(kItemWidth);
@@ -116,17 +123,27 @@ void CodeGenNode::draw() {
     // Or a wired-but-errored upstream renders as "Connect a Filter…".
     std::string upstreamErr = BiquadStageNode::UpstreamErrorFor(inPin("in"));
     if (!upstreamErr.empty()) {
-      ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "Upstream: %s",
-                         upstreamErr.c_str());
+      DrawStatusText(kStatusErrorColor, "Upstream: " + upstreamErr);
     } else {
       ImGui::TextDisabled("Connect a Filter to display code.");
     }
     return;
   }
 
+  // InputTextMultiline neither wraps nor sizes to its text, so a box fixed at
+  // kItemWidth showed the first few tokens of each line. Fit it to the code,
+  // capped so a long cascade doesn't take the canvas over; past the cap the
+  // box scrolls.
+  const ImGuiStyle& style = ImGui::GetStyle();
+  const ImVec2 textSize = ImGui::CalcTextSize(code.c_str());
+  const ImVec2 boxSize{
+      std::clamp(textSize.x + 2.0f * style.FramePadding.x + style.ScrollbarSize,
+                 kItemWidth, kMaxCodeWidth),
+      std::clamp(textSize.y + 2.0f * style.FramePadding.y + style.ScrollbarSize,
+                 4.0f * ImGui::GetTextLineHeight(), kMaxCodeHeight)};
+
   // InputTextMultiline needs a mutable buffer even read-only.
-  ImGui::InputTextMultiline("##code", code.data(), code.size() + 1,
-                            ImVec2{kItemWidth, 200.0f},
+  ImGui::InputTextMultiline("##code", code.data(), code.size() + 1, boxSize,
                             ImGuiInputTextFlags_ReadOnly);
 }
 

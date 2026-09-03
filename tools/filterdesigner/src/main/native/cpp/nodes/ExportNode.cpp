@@ -24,6 +24,7 @@
 #include <imgui.h>
 
 #include "wpi/filterdesigner/graph/Topology.hpp"
+#include "wpi/filterdesigner/nodes/StatusText.hpp"
 #endif
 
 namespace wpi::filterdesigner {
@@ -124,7 +125,7 @@ void ExportNode::draw() {
   if (m_logic->projectRoot.empty()) {
     ImGui::TextDisabled("(no project root selected)");
   } else {
-    ImGui::TextDisabled("%s", m_logic->projectRoot.c_str());
+    DrawStatusTextDisabled(m_logic->projectRoot);
   }
 
   const DesignedFilter* filter = getInVal<const DesignedFilter*>("in");
@@ -136,13 +137,12 @@ void ExportNode::draw() {
     auto target = ResolveExportPath(std::filesystem::path{m_logic->projectRoot},
                                     m_logic->lang,
                                     NormalizeClassName(m_logic->className));
-    ImGui::TextDisabled("Will write: %s", target.string().c_str());
+    DrawStatusTextDisabled("Will write: " + target.string());
   } else if (!haveFilter) {
     // Distinguish "no upstream wired" from "upstream wired but errored".
     std::string upstreamErr = BiquadStageNode::UpstreamErrorFor(inPin("in"));
     if (!upstreamErr.empty()) {
-      ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "Upstream: %s",
-                         upstreamErr.c_str());
+      DrawStatusText(kStatusErrorColor, "Upstream: " + upstreamErr);
     } else {
       ImGui::TextDisabled("Connect a Filter to enable export.");
     }
@@ -157,9 +157,8 @@ void ExportNode::draw() {
   ImGui::EndDisabled();
 
   if (!m_logic->lastMessage.empty()) {
-    ImVec4 col = m_logic->lastOk ? ImVec4{0.4f, 1.0f, 0.4f, 1.0f}
-                                 : ImVec4{1.0f, 0.4f, 0.4f, 1.0f};
-    ImGui::TextColored(col, "%s", m_logic->lastMessage.c_str());
+    DrawStatusText(m_logic->lastOk ? kStatusOkColor : kStatusErrorColor,
+                   m_logic->lastMessage);
   }
 }
 

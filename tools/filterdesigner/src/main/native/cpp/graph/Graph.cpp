@@ -16,6 +16,34 @@
 
 namespace wpi::filterdesigner {
 
+#ifndef RUNNING_FILTERDESIGNER_TESTS
+namespace {
+
+// Clipboard handlers installed on ImNodeFlow's inner context. ImGui invokes
+// them with that context current and its Platform_ClipboardUserData holding
+// the host context, whose handlers (the SDL backend's) do the work. Not the
+// SDL handlers directly: they find their backend data through the current
+// context's IO, which only the host has.
+const char* ForwardGetClipboardText(ImGuiContext* inner) {
+  auto* host = static_cast<ImGuiContext*>(
+      ImGui::GetPlatformIO().Platform_ClipboardUserData);
+  ImGui::SetCurrentContext(host);
+  const char* text = ImGui::GetClipboardText();
+  ImGui::SetCurrentContext(inner);
+  return text;
+}
+
+void ForwardSetClipboardText(ImGuiContext* inner, const char* text) {
+  auto* host = static_cast<ImGuiContext*>(
+      ImGui::GetPlatformIO().Platform_ClipboardUserData);
+  ImGui::SetCurrentContext(host);
+  ImGui::SetClipboardText(text);
+  ImGui::SetCurrentContext(inner);
+}
+
+}  // namespace
+#endif  // RUNNING_FILTERDESIGNER_TESTS
+
 Graph::Graph()
     : m_editor(std::make_unique<ImFlow::ImNodeFlow>("FilterDesignerGraph")) {
   ConfigureEditor();
@@ -70,6 +98,12 @@ void Graph::Update() {
   m_editor->getGrid().config().block_scroll = block;
 #endif
   m_editor->update();
+#ifndef RUNNING_FILTERDESIGNER_TESTS
+  // After update(): the inner context is created inside the first one, and a
+  // Reset() swaps in a fresh editor with a fresh context. Inner input runs a
+  // frame behind the host, so a click can't reach a node before this has run.
+  SyncInnerContext();
+#endif
 }
 
 bool Graph::IsAnyNodeHovered() {
@@ -170,6 +204,23 @@ void Graph::Reset() {
 
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 
+void Graph::SyncInnerContext() {
+  ImGuiContext* inner = m_editor->getGrid().getRawContext();
+  ImGuiContext* host = ImGui::GetCurrentContext();
+  if (!inner || inner == host) {
+    return;
+  }
+  // Same atlas on both sides, so the font pointer is valid in either.
+  ImFont* hostFont = ImGui::GetIO().FontDefault;
+  ImGui::SetCurrentContext(inner);
+  ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+  platformIO.Platform_GetClipboardTextFn = ForwardGetClipboardText;
+  platformIO.Platform_SetClipboardTextFn = ForwardSetClipboardText;
+  platformIO.Platform_ClipboardUserData = host;
+  ImGui::GetIO().FontDefault = hostFont;
+  ImGui::SetCurrentContext(host);
+}
+
 void Graph::ApplyTheme() {
   // Per frame, because the user can switch wpigui's theme from Glass's View
   // menu mid-session.
@@ -212,6 +263,7 @@ void Graph::ApplyTheme() {
 
 #else  // RUNNING_FILTERDESIGNER_TESTS
 
+void Graph::SyncInnerContext() {}
 void Graph::ApplyTheme() {}
 
 #endif  // RUNNING_FILTERDESIGNER_TESTS
