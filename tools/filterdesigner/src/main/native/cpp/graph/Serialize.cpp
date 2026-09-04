@@ -4,6 +4,8 @@
 
 #include "wpi/filterdesigner/graph/Serialize.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <ios>
 #include <limits>
@@ -14,6 +16,7 @@
 #include <string_view>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include <ImNodeFlow.h>
 
@@ -40,6 +43,11 @@ constexpr const char* kRejectV1Message =
 // only ever count the nodes in one design, so half the range is a ceiling
 // no real file approaches and no amount of clicking can climb to.
 constexpr int kMaxGraphInt = std::numeric_limits<int>::max() / 2;
+
+// Where a loaded design's top-left node lands, in grid units. Far enough in
+// that the node's own frame and title aren't flush against the canvas edge,
+// close enough that a fresh viewport shows it.
+constexpr float kLoadedGraphMargin = 40.0f;
 
 // Ids and the version live in an int, so on top of ReadJsonInt's range check
 // a graph int must be non-negative and within that ceiling.
@@ -69,6 +77,48 @@ ImFlow::Pin* FindInPinByName(ImFlow::BaseNode* node, std::string_view name) {
     }
   }
   return nullptr;
+}
+
+// Nodes are saved at the grid coordinates they were placed at, which include
+// however far the user had panned by then. Loading rebuilds the editor, and
+// ImNodeFlow starts a fresh one at scroll zero and exposes no way to move it,
+// so a design built after a long pan would reopen on what looks like an empty
+// canvas with every node off-screen and no fit action to get back to them.
+// Only the nodes' positions relative to one another carry meaning, so bring
+// the whole set to the corner the new viewport is already looking at.
+void RecenterLoadedNodes(Graph& graph, DeserializeResult& result) {
+  const std::vector<FilterDesignerNode*> loaded = graph.Nodes();
+  if (loaded.empty()) {
+    return;
+  }
+  double minX = std::numeric_limits<double>::max();
+  double minY = std::numeric_limits<double>::max();
+  for (FilterDesignerNode* node : loaded) {
+    minX = std::min(minX, static_cast<double>(node->getPos().x));
+    minY = std::min(minY, static_cast<double>(node->getPos().y));
+  }
+  const double shiftX = kLoadedGraphMargin - minX;
+  const double shiftY = kLoadedGraphMargin - minY;
+
+  // Every position is a finite float on its own, but a design spanning most
+  // of that range has no shift that keeps all of them finite. Moving only the
+  // ones that fit would rearrange the graph, which is worse than leaving a
+  // file no one can have authored where it is.
+  for (FilterDesignerNode* node : loaded) {
+    const double x = static_cast<double>(node->getPos().x) + shiftX;
+    const double y = static_cast<double>(node->getPos().y) + shiftY;
+    if (std::abs(x) > std::numeric_limits<float>::max() ||
+        std::abs(y) > std::numeric_limits<float>::max()) {
+      result.warnings.emplace_back(
+          "Nodes are spread too far apart to bring on screen together; "
+          "leaving them where the file put them");
+      return;
+    }
+  }
+  for (FilterDesignerNode* node : loaded) {
+    node->setPos(ImVec2{static_cast<float>(node->getPos().x + shiftX),
+                        static_cast<float>(node->getPos().y + shiftY)});
+  }
 }
 
 }  // namespace
@@ -211,6 +261,8 @@ DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
     graph.BumpNextIdAbove(id);
     node->DeserializeParams(entry);
   }
+
+  RecenterLoadedNodes(graph, result);
 
   for (const json& link : linksNode->get_array()) {
     if (!link.is_object()) {

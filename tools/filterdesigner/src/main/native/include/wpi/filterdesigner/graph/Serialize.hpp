@@ -37,6 +37,11 @@ struct DeserializeResult {
  *
  * Unknown node types log a warning and skip the node — the remaining graph
  * still loads. Links referencing skipped nodes are dropped silently.
+ *
+ * Restored nodes are moved as a set so the top-left of them sits just inside
+ * the canvas corner. A load rebuilds the editor with its viewport back at the
+ * origin, and only the nodes' positions relative to one another survive a
+ * save, so a design built after panning would otherwise reopen off-screen.
  */
 DeserializeResult DeserializeGraph(std::string_view jsonText, Graph& graph,
                                    const NodeRegistry& registry);

@@ -12,6 +12,7 @@
 #include <ImNodeFlow.h>
 #include <catch2/catch_test_macros.hpp>
 
+#include "TestAssertions.hpp"
 #include "wpi/filterdesigner/graph/FilterDesignerNode.hpp"
 #include "wpi/filterdesigner/graph/Graph.hpp"
 #include "wpi/filterdesigner/graph/NodeRegistry.hpp"
@@ -613,6 +614,99 @@ TEST_CASE("SerializeTest NonIntegralVersionIsRejected", "[filterdesigner]") {
       R"({"version": 1e100, "nodes": [], "links": []})", graph, reg);
   CHECK_FALSE(result.ok());
   CHECK(result.error.find("Unsupported") != std::string::npos);
+}
+
+TEST_CASE("SerializeTest LoadedNodesComeBackIntoView", "[filterdesigner]") {
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  // Saved after panning a long way from the origin. A load rebuilds the
+  // editor at scroll zero, so left where they are these are off-screen with
+  // nothing to bring them back.
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FakeSource", "pos": [5000, 4000]},
+      {"id": 2, "type": "FakeSink", "pos": [5200, 4090]}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  CHECK(result.warnings.empty());
+
+  auto* src = restored.FindNodeById(1);
+  auto* sink = restored.FindNodeById(2);
+  REQUIRE(src != nullptr);
+  REQUIRE(sink != nullptr);
+  UNSCOPED_INFO("the top-left node lands just inside the canvas corner");
+  CHECK_FLOAT_EQ(src->getPos().x, 40.0f);
+  CHECK_FLOAT_EQ(src->getPos().y, 40.0f);
+  UNSCOPED_INFO("and the layout moves with it, unchanged");
+  CHECK_FLOAT_EQ(sink->getPos().x, 240.0f);
+  CHECK_FLOAT_EQ(sink->getPos().y, 130.0f);
+}
+
+TEST_CASE("SerializeTest RecenteringADesignTwiceMovesItOnce",
+          "[filterdesigner]") {
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  Graph graph;
+  graph.AddNode<FakeSourceNode>(ImVec2{900.0f, 700.0f});
+  graph.AddNode<FakeSinkNode>(ImVec2{1100.0f, 700.0f});
+
+  Graph once;
+  REQUIRE(DeserializeGraph(SerializeGraph(graph), once, reg).ok());
+  Graph twice;
+  REQUIRE(DeserializeGraph(SerializeGraph(once), twice, reg).ok());
+
+  // Save, load, save, load has to settle: a shift applied to an already
+  // recentered design is a shift of nothing.
+  REQUIRE(once.Nodes().size() == twice.Nodes().size());
+  for (FilterDesignerNode* node : once.Nodes()) {
+    auto* other = twice.FindNodeById(node->GraphId());
+    REQUIRE(other != nullptr);
+    UNSCOPED_INFO("node " << node->GraphId());
+    CHECK_FLOAT_EQ(other->getPos().x, node->getPos().x);
+    CHECK_FLOAT_EQ(other->getPos().y, node->getPos().y);
+  }
+}
+
+TEST_CASE("SerializeTest NodesTooFarApartToRecenterAreLeftWhereTheyAre",
+          "[filterdesigner]") {
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  // Each coordinate is a fine float on its own, but no single shift brings
+  // both inside the float range. Moving only the one that fits would take the
+  // graph apart, so neither moves.
+  std::string json = R"({
+    "version": 2,
+    "nodes": [
+      {"id": 1, "type": "FakeSource", "pos": [-3e38, 0]},
+      {"id": 2, "type": "FakeSink", "pos": [3e38, 0]}
+    ],
+    "links": []
+  })";
+
+  Graph restored;
+  auto result = DeserializeGraph(json, restored, reg);
+  UNSCOPED_INFO(result.error);
+  REQUIRE(result.ok());
+  REQUIRE(restored.Nodes().size() == 2u);
+  auto* src = restored.FindNodeById(1);
+  auto* sink = restored.FindNodeById(2);
+  REQUIRE(src != nullptr);
+  REQUIRE(sink != nullptr);
+  CHECK_FLOAT_EQ(src->getPos().x, -3e38f);
+  CHECK_FLOAT_EQ(sink->getPos().x, 3e38f);
+  REQUIRE(result.warnings.size() == 1u);
+  UNSCOPED_INFO(result.warnings[0]);
+  CHECK(result.warnings[0].find("too far apart") != std::string::npos);
 }
 
 }  // namespace
