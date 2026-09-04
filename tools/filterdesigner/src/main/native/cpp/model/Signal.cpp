@@ -151,6 +151,13 @@ void Signal::ResampleToGrid() {
     const double width = timestamps[lo + 1] - timestamps[lo];
     const double alpha =
         width > 0.0 ? std::clamp((t - timestamps[lo]) / width, 0.0, 1.0) : 0.0;
+    // 0 * NaN is NaN, so blending toward a gap spreads it onto the good
+    // samples either side. Nothing to interpolate toward across a hole: take
+    // the nearer end, and the gap costs only the slots nearest it.
+    if (!std::isfinite(values[lo]) || !std::isfinite(values[lo + 1])) {
+      gridValues[slot] = alpha < 0.5 ? values[lo] : values[lo + 1];
+      continue;
+    }
     gridValues[slot] = values[lo] + alpha * (values[lo + 1] - values[lo]);
   }
 

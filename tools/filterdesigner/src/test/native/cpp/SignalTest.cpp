@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -765,6 +766,82 @@ TEST_CASE("SignalTest ClassifySamplingEscalatesWithFill", "[filterdesigner]") {
   s.quality.jitter = 0.0;
   s.quality.onGrid = false;
   CHECK(ClassifySampling(s) == SamplingSeverity::Bad);
+}
+
+TEST_CASE("SignalTest ResampleToGridKeepsTheSamplesEitherSideOfAGap",
+          "[filterdesigner]") {
+  // Interpolating toward the bad sample would take the good ones at 4 ms and
+  // 6 ms with it, so one broken reading would erase three.
+  std::vector<double> ts;
+  for (int i = 0; i < 20; ++i) {
+    ts.push_back(i * 0.001);
+  }
+  Signal s;
+  s.name = "gappy";
+  s.timestamps = ts;
+  for (int i = 0; i < 20; ++i) {
+    s.values.push_back(static_cast<double>(i));
+  }
+  s.values[5] = std::numeric_limits<double>::quiet_NaN();
+  s.ResampleToGrid();
+
+  REQUIRE(s.values.size() == 20u);
+  CHECK(s.quality.onGrid);
+  UNSCOPED_INFO("the gap costs its own slot");
+  CHECK(std::isnan(s.values[5]));
+  for (std::size_t i = 0; i < s.values.size(); ++i) {
+    if (i == 5) {
+      continue;
+    }
+    UNSCOPED_INFO("value must survive at i=" << i);
+    CHECK_NEAR(s.values[i], static_cast<double>(i), 1e-9);
+  }
+}
+
+TEST_CASE("SignalTest ResampleToGridPutsAGapOnTheSlotsNearestIt",
+          "[filterdesigner]") {
+  // The grid does not always land on the samples, so the hole has to land
+  // where the missing reading was rather than over the whole interval.
+  std::vector<double> ts{0.0, 0.001, 0.002, 0.0035, 0.004};
+  Signal s;
+  s.name = "gappy";
+  s.timestamps = ts;
+  s.values = {0.0, 1.0, 2.0, std::numeric_limits<double>::quiet_NaN(), 4.0};
+  s.ResampleToGrid();
+
+  REQUIRE(s.values.size() == 5u);
+  for (std::size_t i = 0; i < s.timestamps.size(); ++i) {
+    UNSCOPED_INFO("slot " << i << " at t=" << s.timestamps[i]);
+    if (s.timestamps[i] > 0.0025 && s.timestamps[i] < 0.00375) {
+      CHECK(std::isnan(s.values[i]));
+    } else {
+      CHECK(std::isfinite(s.values[i]));
+    }
+  }
+}
+
+TEST_CASE("SignalTest ResampleToGridHoldsADiscreteGapWithoutSpreadingIt",
+          "[filterdesigner]") {
+  // A hold never blended a bad sample into its neighbours, but it still has
+  // to keep working across one.
+  std::vector<double> ts;
+  for (int i = 0; i < 10; ++i) {
+    ts.push_back(i * 0.001);
+  }
+  Signal s;
+  s.name = "steps";
+  s.discrete = true;
+  s.timestamps = ts;
+  for (int i = 0; i < 10; ++i) {
+    s.values.push_back(static_cast<double>(i));
+  }
+  s.values[4] = std::numeric_limits<double>::quiet_NaN();
+  s.ResampleToGrid();
+
+  REQUIRE(s.values.size() == 10u);
+  CHECK(std::isnan(s.values[4]));
+  CHECK_NEAR(s.values[3], 3.0, 1e-9);
+  CHECK_NEAR(s.values[5], 5.0, 1e-9);
 }
 
 }  // namespace
