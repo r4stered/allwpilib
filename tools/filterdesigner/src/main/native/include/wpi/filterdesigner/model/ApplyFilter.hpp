@@ -20,7 +20,7 @@ enum class FilterStart {
    */
   Zero,
   /**
-   * Steady state for the first sample. Meant for a sliding window over a
+   * Steady state for the first finite sample. Meant for a sliding window over a
    * signal that was already running before the window opened: such a source
    * re-filters its whole buffer on every revision, and a zero start would
    * redraw the startup transient at the leading edge as the window slides,
@@ -32,10 +32,16 @@ enum class FilterStart {
 /**
  * Runs @a samples through a @c BiquadFilter cascade built from @a sections.
  *
+ * A non-finite input sample is a gap, not a value: it is reported as NaN and
+ * never enters the recursive state, so it costs its own sample and nothing
+ * else. Feeding it to the cascade would leave NaN in the section state and
+ * turn every later output non-finite too.
+ *
  * @param samples  Input samples.
  * @param sections Cascade to apply. Empty returns @a samples unchanged.
  * @param start    Initial filter state; see @ref FilterStart.
- * @return Filtered samples, same length as @a samples.
+ * @return Filtered samples, same length as @a samples, NaN wherever the
+ *         input was not finite.
  */
 std::vector<double> ApplyFilter(std::span<const double> samples,
                                 const Sections& sections,

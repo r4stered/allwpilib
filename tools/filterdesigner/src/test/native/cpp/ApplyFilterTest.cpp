@@ -4,7 +4,10 @@
 
 #include "wpi/filterdesigner/model/ApplyFilter.hpp"
 
+#include <array>
 #include <cmath>
+#include <cstddef>
+#include <limits>
 #include <numbers>
 #include <vector>
 
@@ -162,6 +165,72 @@ TEST_CASE("ApplyFilterTest SteadyStateStartFallsBackOnADegenerateCascade",
   // Zero state instead, which for a running sum is the plain 1, 2, 3, ...
   CHECK_NEAR(out.front(), 1.0, 1e-12);
   CHECK_NEAR(out.back(), 10.0, 1e-12);
+}
+
+TEST_CASE("ApplyFilterTest NonFiniteSampleIsAGapAndNotAValue",
+          "[filterdesigner]") {
+  auto filter = SectionsOf(BiquadFilter::MovingAverage(5));
+  std::vector<double> in(10, 1.0);
+  in[3] = std::numeric_limits<double>::quiet_NaN();
+  auto out = ApplyFilter(in, filter);
+  // The gap costs its own sample and nothing else: the running average keeps
+  // counting the real samples on either side of it, so what follows is the
+  // same ramp a nine-sample run of 1.0 would give.
+  CHECK(std::isnan(out[3]));
+  const std::array<double, 10> expected{0.2, 0.4, 0.6, 0.0, 0.8,
+                                        1.0, 1.0, 1.0, 1.0, 1.0};
+  for (size_t i = 0; i < out.size(); ++i) {
+    if (i == 3) {
+      continue;
+    }
+    UNSCOPED_INFO("sample " << i);
+    CHECK_NEAR(out[i], expected[i], 1e-12);
+  }
+}
+
+TEST_CASE("ApplyFilterTest InfinityDoesNotPoisonLaterSamples",
+          "[filterdesigner]") {
+  auto filter = SectionsOf(BiquadFilter::Butterworth(
+      BiquadFilter::Kind::LowPass, 4, 1000_Hz, 100_Hz));
+  std::vector<double> in(200, 1.0);
+  in[50] = std::numeric_limits<double>::infinity();
+  auto out = ApplyFilter(in, filter);
+  CHECK(std::isnan(out[50]));
+  // Without the gap policy the infinity would sit in the section state and
+  // every one of these would be non-finite.
+  for (size_t i = 51; i < out.size(); ++i) {
+    UNSCOPED_INFO("sample " << i);
+    CHECK(std::isfinite(out[i]));
+  }
+  CHECK_NEAR(out.back(), 1.0, 1e-6);
+}
+
+TEST_CASE("ApplyFilterTest SteadyStateStartSeedsFromTheFirstFiniteSample",
+          "[filterdesigner]") {
+  auto filter = SectionsOf(BiquadFilter::Butterworth(
+      BiquadFilter::Kind::LowPass, 4, 1000_Hz, 10_Hz));
+  std::vector<double> in(200, 2.5);
+  in[0] = std::numeric_limits<double>::quiet_NaN();
+  auto out = ApplyFilter(in, filter, FilterStart::SteadyState);
+  // Seeding from the NaN would have left nothing to solve for and dropped the
+  // window back to a zero start, which opens well below 2.5.
+  CHECK(std::isnan(out[0]));
+  for (size_t i = 1; i < out.size(); ++i) {
+    UNSCOPED_INFO("sample " << i);
+    CHECK_NEAR(out[i], 2.5, 1e-9);
+  }
+}
+
+TEST_CASE("ApplyFilterTest AllNonFiniteInputProducesAllNaN",
+          "[filterdesigner]") {
+  auto filter = SectionsOf(BiquadFilter::Butterworth(
+      BiquadFilter::Kind::LowPass, 4, 1000_Hz, 100_Hz));
+  std::vector<double> in(4, std::numeric_limits<double>::quiet_NaN());
+  auto out = ApplyFilter(in, filter, FilterStart::SteadyState);
+  REQUIRE(out.size() == in.size());
+  for (double v : out) {
+    CHECK(std::isnan(v));
+  }
 }
 
 }  // namespace
