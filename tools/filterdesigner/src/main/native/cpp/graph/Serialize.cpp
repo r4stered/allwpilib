@@ -358,6 +358,10 @@ std::string SaveGraphToFile(std::string_view path, const Graph& graph) {
     return std::string{"Could not open for writing: "} + std::string{path};
   }
   out << text;
+  // Not just the stream state here: the last buffered chunk is flushed by the
+  // destructor, whose failure nothing can observe. A full disk would report a
+  // clean save over a truncated file.
+  out.close();
   if (!out) {
     return std::string{"Write failed: "} + std::string{path};
   }

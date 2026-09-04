@@ -4,6 +4,10 @@
 
 #include "wpi/filterdesigner/graph/Serialize.hpp"
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <utility>
@@ -23,7 +27,9 @@ namespace {
 using wpi::filterdesigner::DeserializeGraph;
 using wpi::filterdesigner::FilterDesignerNode;
 using wpi::filterdesigner::Graph;
+using wpi::filterdesigner::LoadGraphFromFile;
 using wpi::filterdesigner::NodeRegistry;
+using wpi::filterdesigner::SaveGraphToFile;
 using wpi::filterdesigner::SerializeGraph;
 
 // One source, one sink, both int-typed: the shape of a real pair without the
@@ -707,6 +713,55 @@ TEST_CASE("SerializeTest NodesTooFarApartToRecenterAreLeftWhereTheyAre",
   REQUIRE(result.warnings.size() == 1u);
   UNSCOPED_INFO(result.warnings[0]);
   CHECK(result.warnings[0].find("too far apart") != std::string::npos);
+}
+
+TEST_CASE("SerializeTest SaveWritesTheWholeFileBeforeReportingSuccess",
+          "[filterdesigner]") {
+  // The stream is only known to be good once it has been closed: the last
+  // buffered chunk is flushed by the destructor, and nothing can see that
+  // fail. An empty return here has to mean the bytes are all on disk.
+  NodeRegistry reg;
+  RegisterFakes(reg);
+
+  Graph graph;
+  auto src = graph.AddNode<FakeSourceNode>(ImVec2{10.0f, 20.0f});
+  src->m_value = 42;
+  auto sink = graph.AddNode<FakeSinkNode>(ImVec2{300.0f, 20.0f});
+  sink->inPin("in")->createLink(src->outPin("out"));
+
+  auto tmp = std::filesystem::temp_directory_path() /
+             ("filterdesigner_test_" +
+              std::to_string(
+                  std::chrono::steady_clock::now().time_since_epoch().count()) +
+              ".fdsgn");
+
+  CHECK(SaveGraphToFile(tmp.string(), graph).empty());
+
+  const std::string expected = SerializeGraph(graph);
+  std::ifstream in{tmp, std::ios::binary};
+  REQUIRE(in.is_open());
+  const std::string written{std::istreambuf_iterator<char>{in},
+                            std::istreambuf_iterator<char>{}};
+  in.close();
+  UNSCOPED_INFO("a truncated write must not report a clean save");
+  CHECK(written.size() == expected.size());
+  CHECK(written == expected);
+
+  Graph restored;
+  auto result = LoadGraphFromFile(tmp.string(), restored, reg);
+  UNSCOPED_INFO(result.error);
+  CHECK(result.ok());
+  CHECK(restored.Nodes().size() == 2u);
+
+  std::filesystem::remove(tmp);
+}
+
+TEST_CASE("SerializeTest SaveToAnUnopenablePathReports", "[filterdesigner]") {
+  Graph graph;
+  auto bad = std::filesystem::temp_directory_path() /
+             "filterdesigner_no_such_dir" / "nested" / "x.fdsgn";
+  const std::string error = SaveGraphToFile(bad.string(), graph);
+  CHECK_FALSE(error.empty());
 }
 
 }  // namespace
