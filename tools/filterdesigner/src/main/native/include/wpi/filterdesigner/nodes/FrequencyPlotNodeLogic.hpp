@@ -54,6 +54,12 @@ struct FrequencyPlotNodeLogic {
   std::uint64_t SpectrumComputeCount() const { return m_computeCount; }
 
   /**
+   * True when the signal last seen on @p slot carries a non-finite sample, so
+   * @ref Spectrum::Compute declined it.
+   */
+  bool HasGaps(int slot) const;
+
+  /**
    * True exactly once after @ref logFrequency changes, for the plot to turn
    * into a one-frame x-axis fit.
    *
@@ -73,6 +79,7 @@ struct FrequencyPlotNodeLogic {
     std::uint64_t revision = 0;
     double sampleRate = 0.0;
     bool transient = false;
+    bool gaps = false;
     std::optional<Spectrum> spectrum;
   };
   std::array<CachedSpectrum, kInputCount> m_cache;

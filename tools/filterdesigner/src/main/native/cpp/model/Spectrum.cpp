@@ -22,6 +22,13 @@ std::optional<Spectrum> Spectrum::Compute(std::span<const double> samples,
   if (N < 2 || sampleRate <= 0.0) {
     return std::nullopt;
   }
+  // Every bin sums every sample, so one gap makes the whole spectrum
+  // non-finite. Refuse rather than zero-fill, which would invent an edge and
+  // spread its energy over every bin.
+  if (!std::ranges::all_of(samples,
+                           [](double x) { return std::isfinite(x); })) {
+    return std::nullopt;
+  }
   const bool stationary = mode == SpectrumMode::kStationary;
 
   std::vector<double> windowed(N);

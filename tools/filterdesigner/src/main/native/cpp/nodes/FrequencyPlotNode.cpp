@@ -117,13 +117,28 @@ void FrequencyPlotNode::draw() {
   }
 
   // Fetch spectra up-front so the plot loop is plain plotting. Uniform
-  // sampling is the loaders' job (see Signal::ResampleToGrid), so the only
-  // inputs dropped here are those with no usable rate or too few samples. A
-  // signal whose gaps were too large to fill still gets an FFT over
-  // nonuniform samples; its source node's readout is red.
+  // sampling is the loaders' job (see Signal::ResampleToGrid), so the inputs
+  // dropped here are those with no usable rate, too few samples, or a
+  // non-finite one. A signal whose gaps were too large to fill still gets an
+  // FFT over nonuniform samples; its source node's readout is red.
   std::array<const Spectrum*, kInputCount> spectra{};
   for (int i = 0; i < kInputCount; ++i) {
     spectra[i] = m_logic->SpectrumFor(i, signals[i]);
+  }
+
+  // An absent curve otherwise reads as a pin with nothing wired to it.
+  std::string gappy;
+  for (int i = 0; i < kInputCount; ++i) {
+    if (signals[i] && m_logic->HasGaps(i)) {
+      if (!gappy.empty()) {
+        gappy += ", ";
+      }
+      gappy += kInputNames[i];
+    }
+  }
+  if (!gappy.empty()) {
+    ImGui::TextDisabled("No spectrum for %s: non-finite samples.",
+                        gappy.c_str());
   }
 
   ImVec2 plotSize{m_logic->plotWidth, m_logic->plotHeight};

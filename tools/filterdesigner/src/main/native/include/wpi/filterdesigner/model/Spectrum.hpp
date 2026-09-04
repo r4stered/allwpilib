@@ -43,9 +43,10 @@ struct Spectrum {
   /**
    * Compute the single-sided magnitude spectrum of @a samples.
    *
-   * Returns @c std::nullopt when the signal is too short (< 2 samples) or the
-   * sample rate is non-positive. FFT length is @a samples.size(); PocketFFT
-   * handles non-power-of-two lengths but composite sizes are fastest.
+   * Returns @c std::nullopt when the signal is too short (< 2 samples), the
+   * sample rate is non-positive, or any sample is non-finite. FFT length is
+   * @a samples.size(); PocketFFT handles non-power-of-two lengths but
+   * composite sizes are fastest.
    *
    * @param samples    Real-valued time series.
    * @param sampleRate Sampling frequency in Hz.

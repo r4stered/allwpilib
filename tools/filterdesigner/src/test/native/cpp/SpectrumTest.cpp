@@ -5,6 +5,7 @@
 #include "wpi/filterdesigner/model/Spectrum.hpp"
 
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <vector>
 
@@ -188,6 +189,31 @@ TEST_CASE("SpectrumTest TransientModeReadsAFilteredImpulseAsTheResponse",
   CHECK_NEAR(spec->magnitudesDb[0], 0.0, 1e-9);
   CHECK_NEAR(spec->magnitudesDb[16], 20.0 * std::log10(std::sqrt(0.5)), 1e-9);
   CHECK(spec->magnitudesDb[32] < -200.0);
+}
+
+TEST_CASE("SpectrumTest NonFiniteSampleHasNoSpectrum", "[filterdesigner]") {
+  // One bad reading is not a bad bin, it is the whole spectrum gone.
+  std::vector<double> samples(64, 1.0);
+  samples[10] = std::numeric_limits<double>::quiet_NaN();
+  CHECK_FALSE(Spectrum::Compute(samples, 1000.0, SpectrumMode::kStationary)
+                  .has_value());
+
+  samples[10] = std::numeric_limits<double>::infinity();
+  CHECK_FALSE(Spectrum::Compute(samples, 1000.0, SpectrumMode::kStationary)
+                  .has_value());
+
+  samples[10] = -std::numeric_limits<double>::infinity();
+  CHECK_FALSE(Spectrum::Compute(samples, 1000.0, SpectrumMode::kStationary)
+                  .has_value());
+}
+
+TEST_CASE("SpectrumTest NonFiniteSampleHasNoTransientSpectrumEither",
+          "[filterdesigner]") {
+  std::vector<double> samples(64, 0.0);
+  samples[0] = 1.0;
+  samples[20] = std::numeric_limits<double>::quiet_NaN();
+  CHECK_FALSE(
+      Spectrum::Compute(samples, 1000.0, SpectrumMode::kTransient).has_value());
 }
 
 }  // namespace

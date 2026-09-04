@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <numbers>
 
 #include <catch2/catch_test_macros.hpp>
@@ -212,6 +213,57 @@ TEST_CASE("FrequencyPlotNodeLogicTest LoadedLogSettingRefitsOnFirstDraw",
   logic.logFrequency = true;
   CHECK(logic.TakeXAxisRefit());
   CHECK_FALSE(logic.TakeXAxisRefit());
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest GappySignalIsReportedNotJustDropped",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  Signal in = SineSignal(50.0, 1000.0, 256);
+  in.values[100] = std::numeric_limits<double>::quiet_NaN();
+
+  CHECK(logic.SpectrumFor(0, &in) == nullptr);
+  UNSCOPED_INFO("a missing curve alone reads as an unconnected pin");
+  CHECK(logic.HasGaps(0));
+  UNSCOPED_INFO("and only for the pin that has one");
+  CHECK_FALSE(logic.HasGaps(1));
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest CleanSignalReportsNoGaps",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  Signal in = SineSignal(50.0, 1000.0, 256);
+  CHECK(logic.SpectrumFor(0, &in) != nullptr);
+  CHECK_FALSE(logic.HasGaps(0));
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest GapReportClearsWhenTheSignalRecovers",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  Signal in = SineSignal(50.0, 1000.0, 256);
+  in.values[100] = std::numeric_limits<double>::quiet_NaN();
+  REQUIRE(logic.SpectrumFor(0, &in) == nullptr);
+  REQUIRE(logic.HasGaps(0));
+
+  // A live source draining a clean window next has to stop being reported.
+  in.values[100] = 0.0;
+  ++in.revision;
+  CHECK(logic.SpectrumFor(0, &in) != nullptr);
+  CHECK_FALSE(logic.HasGaps(0));
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest DisconnectedPinReportsNoGaps",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  Signal in = SineSignal(50.0, 1000.0, 256);
+  in.values[100] = std::numeric_limits<double>::quiet_NaN();
+  REQUIRE(logic.SpectrumFor(0, &in) == nullptr);
+  REQUIRE(logic.HasGaps(0));
+
+  CHECK(logic.SpectrumFor(0, nullptr) == nullptr);
+  CHECK_FALSE(logic.HasGaps(0));
+  UNSCOPED_INFO("an out-of-range slot has no cache to report from");
+  CHECK_FALSE(logic.HasGaps(-1));
+  CHECK_FALSE(logic.HasGaps(FrequencyPlotNodeLogic::kInputCount));
 }
 
 }  // namespace
