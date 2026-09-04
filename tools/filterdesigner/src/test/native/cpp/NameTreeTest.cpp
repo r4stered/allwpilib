@@ -170,7 +170,25 @@ TEST_CASE("NameTreeTest LeavesCacheTheirRenderedRow", "[filterdesigner]") {
   UNSCOPED_INFO("a pure branch renders its name, so it needs no label");
   CHECK(accel->label.empty());
   REQUIRE(accel->children.size() == 1);
-  CHECK(accel->children[0].label == "x  [double]");
+  CHECK(accel->children[0].label == "x  [double]##/accel/x");
+}
+
+TEST_CASE("NameTreeTest RowsThatSplitAlikeGetDistinctIds", "[filterdesigner]") {
+  // "/foo" and "foo" land as siblings named "foo" with the same type, so
+  // their visible text is identical. ImGui takes a Selectable's id from its
+  // label, and two rows sharing an id share their click and focus state.
+  std::vector<NameTreeItem> items{{"/foo", "double", true},
+                                  {"foo", "double", true}};
+  NameTreeNode root = BuildNameTree(items);
+
+  REQUIRE(root.children.size() == 2u);
+  CHECK(root.children[0].name == "foo");
+  CHECK(root.children[1].name == "foo");
+  CHECK(root.children[0].label != root.children[1].label);
+  UNSCOPED_INFO("everything before the ## is what the row shows");
+  for (const auto& child : root.children) {
+    CHECK(child.label.starts_with("foo  [double]##"));
+  }
 }
 
 TEST_CASE("NameTreeTest EmptySearchMatchesEverything", "[filterdesigner]") {

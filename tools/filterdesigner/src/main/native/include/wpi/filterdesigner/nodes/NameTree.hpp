@@ -42,9 +42,12 @@ struct NameTreeNode {
    * branch. */
   std::string fullPath;
   std::string type;
-  /** Pre-formatted "name  [type]" for the leaf's row — built once with the
-   * tree rather than per frame, which is what @c LogEntry used to cache for
-   * the flat combo. Empty for a pure branch, which renders @ref name. */
+  /** Pre-formatted "name  [type]##fullPath" for the leaf's row — built once
+   * with the tree rather than per frame, which is what @c LogEntry used to
+   * cache for the flat combo. ImGui shows the text before the "##" and takes
+   * the row's id from the whole string, so two leaves that split alike read
+   * the same and still act independently. Empty for a pure branch, which
+   * renders @ref name. */
   std::string label;
   bool selectable = true;
   /** Sorted by @ref name. */

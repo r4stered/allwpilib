@@ -72,7 +72,12 @@ NameTreeNode BuildNameTree(std::span<const NameTreeItem> items) {
       if (leaf) {
         it->fullPath = std::string{item.name};
         it->type = std::string{item.type};
-        it->label = it->name + "  [" + it->type + "]";
+        // Two names that split alike keep a row each, and those rows would
+        // otherwise carry the same text — "foo  [double]" twice. ImGui derives
+        // a Selectable's id from that text, so the pair would share one id and
+        // with it their click, focus and selection state. The hidden suffix is
+        // the full name, which is what tells them apart in the first place.
+        it->label = it->name + "  [" + it->type + "]##" + it->fullPath;
         it->selectable = item.selectable;
       }
       cursor = &*it;
