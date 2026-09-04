@@ -372,4 +372,39 @@ TEST_CASE("BiquadStageNodeLogicTest NonFiniteUnusedParameterStillDesigns",
   CHECK(logic.Filter() != nullptr);
 }
 
+TEST_CASE("BiquadStageNodeLogicTest NonFiniteCoefficientsAreRejected",
+          "[filterdesigner]") {
+  // Every parameter here is finite and passes the designer's own guards, but
+  // a subnormal q sends w0/q to infinity inside Notch and tan of that is NaN.
+  // A full section list of NaN would have read as a valid filter.
+  BiquadStageNodeLogic logic;
+  logic.sampleRate = 1000.0;
+  logic.stage.kind = StageKind::Notch;
+  logic.stage.f1 = 100.0;
+  logic.stage.q = 1e-320;
+
+  CHECK(logic.Filter() == nullptr);
+  UNSCOPED_INFO(logic.DesignError());
+  CHECK(logic.DesignError().find("non-finite") != std::string::npos);
+}
+
+TEST_CASE("BiquadStageNodeLogicTest FiniteCoefficientsStillDesign",
+          "[filterdesigner]") {
+  // The same notch with an ordinary q, so the new check cannot be passing by
+  // rejecting everything.
+  BiquadStageNodeLogic logic;
+  logic.sampleRate = 1000.0;
+  logic.stage.kind = StageKind::Notch;
+  logic.stage.f1 = 100.0;
+  logic.stage.q = 1e-3;
+
+  const DesignedFilter* design = logic.Filter();
+  UNSCOPED_INFO(logic.DesignError());
+  REQUIRE(design != nullptr);
+  for (const auto& sec : design->sections) {
+    CHECK(std::isfinite(sec.b0));
+    CHECK(std::isfinite(sec.a1));
+  }
+}
+
 }  // namespace

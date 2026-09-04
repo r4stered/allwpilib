@@ -95,6 +95,21 @@ bool UsedParametersAreFinite(const Stage& s, double fs) {
          (!usesAtten || std::isfinite(s.stopbandAttenDb));
 }
 
+// Finite inputs do not guarantee finite coefficients: a notch with a
+// subnormal q overflows w0/q to infinity, and tan of that is NaN. Nothing
+// downstream rejects a full section list, so the plots would draw nothing and
+// export would emit nan literals.
+std::pair<Sections, std::string> CheckedSections(Sections sections) {
+  for (const Section& sec : sections) {
+    if (!std::isfinite(sec.b0) || !std::isfinite(sec.b1) ||
+        !std::isfinite(sec.b2) || !std::isfinite(sec.a1) ||
+        !std::isfinite(sec.a2)) {
+      return {{}, "Parameters produce non-finite coefficients"};
+    }
+  }
+  return {std::move(sections), {}};
+}
+
 // Returns the designed Sections or a populated error message; one or the
 // other is set on return. Swallows wpi::math::BiquadFilter's
 // std::invalid_argument so the node can render an error banner instead of
@@ -120,19 +135,19 @@ std::pair<Sections, std::string> DesignStage(const Stage& s, double fs) {
   try {
     switch (s.kind) {
       case StageKind::LowPass:
-        return {DesignClassicalKind(K::LowPass, s, fs), {}};
+        return CheckedSections(DesignClassicalKind(K::LowPass, s, fs));
       case StageKind::HighPass:
-        return {DesignClassicalKind(K::HighPass, s, fs), {}};
+        return CheckedSections(DesignClassicalKind(K::HighPass, s, fs));
       case StageKind::BandPass:
-        return {DesignClassicalKind(K::BandPass, s, fs), {}};
+        return CheckedSections(DesignClassicalKind(K::BandPass, s, fs));
       case StageKind::BandStop:
-        return {DesignClassicalKind(K::BandStop, s, fs), {}};
+        return CheckedSections(DesignClassicalKind(K::BandStop, s, fs));
       case StageKind::Notch:
-        return {ToSections(wpi::math::BiquadFilter::Notch(
-                    units::hertz_t{fs}, units::hertz_t{s.f1}, s.q)),
-                {}};
+        return CheckedSections(ToSections(wpi::math::BiquadFilter::Notch(
+            units::hertz_t{fs}, units::hertz_t{s.f1}, s.q)));
       case StageKind::MovingAverage:
-        return {ToSections(wpi::math::BiquadFilter::MovingAverage(s.taps)), {}};
+        return CheckedSections(
+            ToSections(wpi::math::BiquadFilter::MovingAverage(s.taps)));
     }
   } catch (const std::invalid_argument& e) {
     return {{}, std::string{"Invalid parameters: "} + e.what()};
