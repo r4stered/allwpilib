@@ -4,6 +4,7 @@
 
 #include "wpi/filterdesigner/nodes/BiquadStageNode.hpp"
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <utility>
@@ -18,7 +19,6 @@
 
 #ifndef RUNNING_FILTERDESIGNER_TESTS
 #include <algorithm>
-#include <cmath>
 
 #include <imgui.h>
 
@@ -136,7 +136,14 @@ const DesignedFilter* BiquadStageNode::CombinedFilterImpl(int depth) const {
     return nullptr;
   }
 
-  if (upstreamFilter && upstreamFilter->sampleRate != self->sampleRate) {
+  // The same proportional tolerance the input boundary uses. Auto-sync holds
+  // a stage's rate inside a 1% deadband, so chained stages tracking one
+  // wobbling live source settle on rates that differ slightly; an exact
+  // comparison then withheld the Bode plot and codegen from a chain that was
+  // filtering perfectly happily.
+  if (upstreamFilter &&
+      std::abs(upstreamFilter->sampleRate - self->sampleRate) >
+          BiquadStageNodeLogic::kRateMismatchTolerance * self->sampleRate) {
     m_combinedError = "Sample rate mismatch with upstream stage.";
     m_haveCombined = false;
     return nullptr;

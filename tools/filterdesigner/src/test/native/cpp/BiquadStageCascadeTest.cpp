@@ -197,4 +197,43 @@ TEST_CASE("BiquadStageCascadeTest UpstreamErrorForReportsStageDesignError",
   CHECK_FALSE(BiquadStageNode::UpstreamErrorFor(codegen->inPin("in")).empty());
 }
 
+TEST_CASE("BiquadStageCascadeTest RatesInsideTheDeadbandStillCombine",
+          "[filterdesigner]") {
+  // Auto-sync leaves a stage's rate alone while an input stays within 1% of
+  // it, so two stages tracking one wobbling live source settle a little
+  // apart. Both filter the signal happily under the 2% input tolerance, and
+  // an exact comparison here used to withhold the Bode plot and codegen from
+  // a chain that was working.
+  Graph graph;
+  auto stageA = graph.AddNode<BiquadStageNode>(ImVec2{0.0f, 0.0f});
+  auto stageB = graph.AddNode<BiquadStageNode>(ImVec2{200.0f, 0.0f});
+  stageA->Logic().sampleRate = 990.0;
+  stageB->Logic().sampleRate = 1000.0;
+  stageB->inPin("in")->createLink(stageA->outPin("signal"));
+
+  const auto* combined = stageB->CombinedFilter();
+  UNSCOPED_INFO(stageB->CombinedError());
+  REQUIRE(combined != nullptr);
+  UNSCOPED_INFO("the cascade is plotted at the downstream stage's rate");
+  CHECK_DOUBLE_EQ(combined->sampleRate, 1000.0);
+  const auto* own = stageB->Logic().Filter();
+  REQUIRE(own != nullptr);
+  CHECK(combined->sections.size() > own->sections.size());
+}
+
+TEST_CASE("BiquadStageCascadeTest RatesJustOutsideTheToleranceStillMismatch",
+          "[filterdesigner]") {
+  // 3% apart: past the 2% the input boundary accepts, so the cascade has to
+  // keep refusing it.
+  Graph graph;
+  auto stageA = graph.AddNode<BiquadStageNode>(ImVec2{0.0f, 0.0f});
+  auto stageB = graph.AddNode<BiquadStageNode>(ImVec2{200.0f, 0.0f});
+  stageA->Logic().sampleRate = 970.0;
+  stageB->Logic().sampleRate = 1000.0;
+  stageB->inPin("in")->createLink(stageA->outPin("signal"));
+
+  CHECK(stageB->CombinedFilter() == nullptr);
+  CHECK(stageB->CombinedError().find("Sample rate") != std::string::npos);
+}
+
 }  // namespace
