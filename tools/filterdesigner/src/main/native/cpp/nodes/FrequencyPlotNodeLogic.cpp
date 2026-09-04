@@ -34,4 +34,12 @@ const Spectrum* FrequencyPlotNodeLogic::SpectrumFor(int slot,
   return c.spectrum ? &*c.spectrum : nullptr;
 }
 
+bool FrequencyPlotNodeLogic::TakeXAxisRefit() {
+  if (m_drawnLogFrequency == logFrequency) {
+    return false;
+  }
+  m_drawnLogFrequency = logFrequency;
+  return true;
+}
+
 }  // namespace wpi::filterdesigner

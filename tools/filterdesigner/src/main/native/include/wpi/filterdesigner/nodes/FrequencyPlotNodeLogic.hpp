@@ -53,6 +53,20 @@ struct FrequencyPlotNodeLogic {
   /** Number of FFTs run so far; lets a test see a cache hit. */
   std::uint64_t SpectrumComputeCount() const { return m_computeCount; }
 
+  /**
+   * True exactly once after @ref logFrequency changes, for the plot to turn
+   * into a one-frame x-axis fit.
+   *
+   * ImPlot fits an axis on its first frame and then keeps whatever range it
+   * has. A linear fit's range starts at bin zero — 0 Hz — and a log axis maps
+   * anything at or below zero to DBL_MIN, so a plot that opened linear and
+   * was then switched to log would span three hundred empty decades with
+   * every real bin crushed against the right edge. The fit has to be asked
+   * for, and only on the frame the scale changed: fitting every frame would
+   * take the user's own pan and zoom away from them.
+   */
+  bool TakeXAxisRefit();
+
  private:
   struct CachedSpectrum {
     const Signal* input = nullptr;
@@ -63,6 +77,9 @@ struct FrequencyPlotNodeLogic {
   };
   std::array<CachedSpectrum, kInputCount> m_cache;
   std::uint64_t m_computeCount = 0;
+  /** Matches @ref logFrequency's default, so a plot that opens linear does
+   * not ask for a fit it is already getting from ImPlot. */
+  bool m_drawnLogFrequency = false;
 };
 
 }  // namespace wpi::filterdesigner

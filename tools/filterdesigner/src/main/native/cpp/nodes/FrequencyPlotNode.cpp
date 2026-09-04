@@ -131,7 +131,11 @@ void FrequencyPlotNode::draw() {
   ImPlotFlags plotFlags =
       m_logic->showLegend ? ImPlotFlags_None : ImPlotFlags_NoLegend;
   if (ImPlot::BeginPlot("##freqplot", plotSize, plotFlags)) {
-    ImPlotAxisFlags xFlags = ImPlotAxisFlags_None;
+    // Asked for only on the frame the scale changed (see TakeXAxisRefit),
+    // and read here rather than beside the checkbox so a frame that never
+    // reaches BeginPlot leaves the fit still owed.
+    ImPlotAxisFlags xFlags = m_logic->TakeXAxisRefit() ? ImPlotAxisFlags_AutoFit
+                                                       : ImPlotAxisFlags_None;
     ImPlotAxisFlags yFlags =
         m_logic->autoscale ? ImPlotAxisFlags_AutoFit : ImPlotAxisFlags_None;
     ImPlot::SetupAxis(ImAxis_X1, "Frequency (Hz)", xFlags);

@@ -164,4 +164,54 @@ TEST_CASE("FrequencyPlotNodeLogicTest OutOfRangeSlotIsNull",
   CHECK(logic.SpectrumComputeCount() == 0u);
 }
 
+TEST_CASE("FrequencyPlotNodeLogicTest AFreshLinearPlotAsksForNoRefit",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  // ImPlot fits an axis on its first frame anyway; asking again would be a
+  // second fit the plot never needed.
+  CHECK_FALSE(logic.TakeXAxisRefit());
+  CHECK_FALSE(logic.TakeXAxisRefit());
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest ScaleChangeAsksForOneRefit",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  REQUIRE_FALSE(logic.TakeXAxisRefit());
+
+  logic.logFrequency = true;
+  UNSCOPED_INFO(
+      "the linear range starts at 0 Hz, which a log axis cannot show");
+  CHECK(logic.TakeXAxisRefit());
+  UNSCOPED_INFO("and only once, or the user could never pan or zoom");
+  CHECK_FALSE(logic.TakeXAxisRefit());
+  CHECK_FALSE(logic.TakeXAxisRefit());
+
+  logic.logFrequency = false;
+  UNSCOPED_INFO("back to linear is a scale change too");
+  CHECK(logic.TakeXAxisRefit());
+  CHECK_FALSE(logic.TakeXAxisRefit());
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest ToggleAndBackWithinAFrameAsksForNothing",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  REQUIRE_FALSE(logic.TakeXAxisRefit());
+
+  // The fit is owed against what was last drawn, not against each click, so a
+  // frame the plot never reached leaves nothing stale behind.
+  logic.logFrequency = true;
+  logic.logFrequency = false;
+  CHECK_FALSE(logic.TakeXAxisRefit());
+}
+
+TEST_CASE("FrequencyPlotNodeLogicTest LoadedLogSettingRefitsOnFirstDraw",
+          "[filterdesigner]") {
+  FrequencyPlotNodeLogic logic;
+  // A design saved with Log x on: the flag is set before the plot has ever
+  // drawn, so the first frame owes the fit.
+  logic.logFrequency = true;
+  CHECK(logic.TakeXAxisRefit());
+  CHECK_FALSE(logic.TakeXAxisRefit());
+}
+
 }  // namespace
